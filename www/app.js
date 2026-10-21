@@ -26,9 +26,9 @@ function sheets(wb,u,h){
    if(!h[n])h[n]=cells;u.push({k:'x',loc:n+' · Ligne '+(a+i+1),sh:n,c0:c,cells,t:cells.filter(Boolean).join(' | ')})})}}
 
 async function parse(f){
- const buf=await f.arrayBuffer(),e=f.name.split('.').pop().toLowerCase(),u=[],h={};let ty,lab;
- if(/^(xlsx|xlsm|xlsb|xls|ods)$/.test(e)){ty='Excel';lab='lignes';sheets(XLSX.read(buf,{type:'array'}),u,h)}
- else if(e=='csv'){ty='Excel';lab='lignes';sheets(XLSX.read(new TextDecoder().decode(buf),{type:'string'}),u,h)}
+ const buf=await f.arrayBuffer(),e=f.name.split('.').pop().toLowerCase(),u=[],h={};let ty,lab,tabs;
+ if(/^(xlsx|xlsm|xlsb|xls|ods)$/.test(e)){ty='Excel';lab='lignes';const wb=XLSX.read(buf,{type:'array'});tabs=wb.SheetNames;sheets(wb,u,h)}
+ else if(e=='csv'){ty='Excel';lab='lignes';const wb=XLSX.read(new TextDecoder().decode(buf),{type:'string'});tabs=wb.SheetNames;sheets(wb,u,h)}
  else if(/^(docx|docm|dotx)$/.test(e)){ty='Word';lab='éléments';const z=await JSZip.loadAsync(buf),
   L={header:'En-tête',footer:'Pied de page',footnotes:'Notes',endnotes:'Notes de fin',comments:'Commentaires'};
   for(const p of Object.keys(z.files).filter(n=>/^word\/(document|header\d*|footer\d*|footnotes|endnotes|comments)\.xml$/.test(n))){
@@ -49,7 +49,7 @@ async function parse(f){
  else if(/^(txt|md|log)$/.test(e)){ty='Texte';lab='lignes';new TextDecoder().decode(buf).split(/\r?\n/).forEach((t,i)=>{if(t.trim())u.push({k:'p',loc:'Ligne '+(i+1),t})})}
  else throw new Error('format non pris en charge (les anciens .doc et .ppt doivent être enregistrés en .docx / .pptx)');
  if(!u.length)throw new Error('aucun texte trouvé');
- return{id:Date.now()+Math.random(),name:f.name,size:f.size,type:ty,lab,units:u,heads:h,added:Date.now()}}
+ return{id:Date.now()+Math.random(),name:f.name,size:f.size,type:ty,lab,units:u,heads:h,tabs,added:Date.now()}}
 
 /* ---------- Recherche ---------- */
 const txt=(u,a)=>a?(u.n??=norm(u.t)):(u.f??=fold(u.t));
@@ -64,7 +64,7 @@ function snip(u){const r=rng(u.t)[0]||[0,0],a=Math.max(0,r[0]-50),b=Math.min(u.t
 function run(){
  S.res=[];S.rx=null;S.n=150;const q=$('#q').value;
  if(q){try{S.rx=build(q)}catch(e){$('#info').textContent='Expression invalide';$('#list').innerHTML='';return}
-  const sc=$('#os').value;for(const d of S.docs){if(sc!='all'&&d.id!=sc)continue;d.units.forEach((u,i)=>{const z=txt(u,S.rx.a);if(S.rx.t.every(r=>r.test(z)))S.res.push([d,i])})}}
+  const sc=$('#os').value;for(const d of S.docs){if(sc!='all'&&d.id!=sc)continue;const ot=sc!='all'?$('#ot').value:'all';d.units.forEach((u,i)=>{if(ot!='all'&&u.sh!=ot)return;const z=txt(u,S.rx.a);if(S.rx.t.every(r=>r.test(z)))S.res.push([d,i])})}}
  draw()}
 function draw(){
  const L=$('#list'),I=$('#info'),q=$('#q').value;
@@ -95,10 +95,11 @@ const wait=ms=>new Promise(r=>setTimeout(r,ms));
 /* ---------- Documents ---------- */
 function fill(){
  const kb=n=>n>1048576?(n/1048576).toFixed(1)+' Mo':Math.ceil(n/1024)+' Ko';
- $('#dl').innerHTML=S.docs.length?S.docs.map(d=>'<div class="doc" data-id="'+d.id+'"><i class="ty '+d.type+'">'+d.type+'</i><div><b>'+esc(d.name)+'</b><small>'+d.units.length+' '+d.lab+' · '+kb(d.size)+' · '+new Date(d.added).toLocaleDateString('fr-FR')+'</small></div><button class="del" data-del="'+d.id+'">Supprimer</button></div>').join('')
+ $('#dl').innerHTML=S.docs.length?S.docs.map(d=>'<div class="doc" data-id="'+d.id+'"><i class="ty '+d.type+'">'+d.type+'</i><div><b>'+esc(d.name)+'</b><small>'+d.units.length+' '+d.lab+(d.tabs?' · '+d.tabs.length+' onglet'+(d.tabs.length>1?'s':''):'')+' · '+kb(d.size)+' · '+new Date(d.added).toLocaleDateString('fr-FR')+'</small></div><button class="del" data-del="'+d.id+'">Supprimer</button></div>').join('')
   +'<button class="lnk" id="delall">Tout supprimer</button>':'<div class="empty">Aucun document.<br>Ajoutez des fichiers Word, Excel ou PowerPoint : ils restent ici, même hors ligne, jusqu’à ce que vous les supprimiez.</div>';
  $('#hc').textContent=S.docs.length?S.docs.length+' document'+(S.docs.length>1?'s':'')+' en mémoire':'Aucun document en mémoire';
- const s=$('#os'),v=s.value;s.innerHTML='<option value="all">Tous les documents</option>'+S.docs.map(d=>'<option value="'+d.id+'">'+esc(d.name)+'</option>').join('');s.value=S.docs.some(d=>d.id==v)?v:'all'}
+ const s=$('#os'),v=s.value;s.innerHTML='<option value="all">Tous les documents</option>'+S.docs.map(d=>'<option value="'+d.id+'">'+esc(d.name)+'</option>').join('');s.value=S.docs.some(d=>d.id==v)?v:'all';tabSel()}
+function tabSel(){const d=S.docs.find(x=>x.id==$('#os').value),t=$('#ot');t.hidden=!(d&&d.tabs&&d.tabs.length>1);t.innerHTML='<option value="all">Tous les onglets</option>'+(d&&d.tabs?d.tabs.map(n=>'<option>'+esc(n)+'</option>').join(''):'')}
 async function add(files){
  const B=$('#busy');B.classList.add('on');
  for(const f of files){$('#bt').textContent='Lecture de '+f.name+'…';await wait(60);
@@ -121,7 +122,7 @@ document.addEventListener('click',async e=>{
  else if(t.id=='delall'&&await ask('Tout supprimer ?','Les '+S.docs.length+' documents seront retirés de la mémoire de l’application.','Tout supprimer',1)){await DB.clr();S.docs=[];fill();run()}});
 $('#fi').onchange=e=>{const f=[...e.target.files];e.target.value='';if(f.length)add(f)};
 let tm;$('#q').oninput=()=>{clearTimeout(tm);tm=setTimeout(run,250)};
-$$('#oc,#ow,#oa,#om,#os').forEach(x=>x.onchange=run);
+$$('#oc,#ow,#oa,#om,#ot').forEach(x=>x.onchange=run);$('#os').onchange=()=>{tabSel();run()};
 let sx=0;$('#det').addEventListener('touchstart',e=>sx=e.touches[0].clientX,{passive:true});
 $('#det').addEventListener('touchend',e=>{const d=e.changedTouches[0].clientX-sx;if(d<-70&&S.i<S.res.length-1)show(S.i+1);else if(d>70&&S.i>0)show(S.i-1)},{passive:true});
 function back(){if(cancel)cancel();else if($('#det').classList.contains('on'))$('#det').classList.remove('on');else if(cur!='home')go('home');else quit()}
