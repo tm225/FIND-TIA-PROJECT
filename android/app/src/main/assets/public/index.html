@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>FIND TIA</title>
+<style>
+:root{--ink:#0F2A33;--teal:#1FA39A;--sun:#FFC247;--bg:#EEF3F4;--bad:#E4572E}
+*{box-sizing:border-box;margin:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overflow:hidden}
+body{font:16px/1.4 system-ui,Roboto,sans-serif;background:var(--bg);color:var(--ink);transition:opacity .4s}
+body.bye{opacity:0}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
+.scr{position:absolute;inset:0;overflow:auto;padding:calc(env(safe-area-inset-top) + 18px) 16px 96px;transform:translateX(9%);opacity:0;pointer-events:none;transition:transform .42s cubic-bezier(.2,.8,.2,1),opacity .3s}
+.scr.on{transform:none;opacity:1;pointer-events:auto}.scr.l{transform:translateX(-9%)}
+h1{font-size:26px;letter-spacing:-.5px;margin-bottom:12px}
+#home{background:var(--ink);color:#fff;display:flex;flex-direction:column;justify-content:center;gap:12px}
+.wm{font-size:58px;font-weight:800;letter-spacing:-2px;line-height:1}
+.wm em{font-style:normal;position:relative;isolation:isolate;color:var(--ink);padding:0 8px;margin-left:4px}
+.wm em:before{content:"";position:absolute;inset:6px 0 0;background:var(--sun);z-index:-1;transform:scaleX(0);transform-origin:left}
+.lens{width:70px;vertical-align:-14px;margin-left:-6px;opacity:0;transform:translate(-220px,50px) rotate(-35deg)}
+.play .wm em:before{animation:hl .7s .55s cubic-bezier(.2,.8,.2,1) forwards}
+.play .lens{animation:ln 1s .1s cubic-bezier(.2,.8,.2,1) forwards}
+.tag{opacity:.75;margin-bottom:18px}
+.mb{display:block;width:100%;text-align:left;padding:18px;border-radius:18px;background:#ffffff14;margin-top:10px}
+.mb b{display:block;font-size:19px}.mb small{opacity:.7}
+.mb.q{background:none;border:1.5px solid #ffffff44}
+.play .mb,.play .tag{animation:up .55s backwards}
+.play .mb:nth-of-type(1){animation-delay:.9s}.play .mb:nth-of-type(2){animation-delay:1s}.play .mb:nth-of-type(3){animation-delay:1.1s}
+.mb:active,.chip:active,.fab:active{transform:scale(.97)}
+@keyframes hl{to{transform:none}}@keyframes ln{to{opacity:1;transform:none}}@keyframes up{from{opacity:0;transform:translateY(24px)}}
+@media(prefers-reduced-motion){*{animation:none!important;transition:none!important}.lens{opacity:1;transform:none}.wm em:before{transform:none}}
+.sf{display:flex;align-items:center;background:#fff;border-radius:30px;padding:0 6px 0 18px;box-shadow:0 4px 18px #0f2a331a}
+.sf input{flex:1;border:0;outline:0;font:inherit;font-size:18px;padding:15px 0;background:none;min-width:0}
+.sf button{width:40px;height:40px;border-radius:50%;font-size:20px;opacity:.5}
+.opt{margin:10px 0}.opt summary{cursor:pointer;color:var(--teal);font-weight:600;padding:6px 0}
+.panel{display:flex;flex-wrap:wrap;gap:8px;padding:6px 0}
+.panel select{font:inherit;padding:9px;border-radius:12px;border:1.5px solid #cbd8db;background:#fff;max-width:100%}
+.chip input{display:none}.chip span{display:block;padding:9px 14px;border-radius:20px;background:#fff;border:1.5px solid #cbd8db;transition:.2s}
+.chip input:checked+span{background:var(--ink);color:#fff;border-color:var(--ink)}
+#info{opacity:.7;margin:4px 2px 8px;font-size:14px}
+h3{font-size:14px;margin:16px 2px 6px;color:var(--teal);position:sticky;top:-18px;background:var(--bg);padding:6px 0;word-break:break-word}
+.res{display:block;width:100%;text-align:left;background:#fff;border-radius:14px;padding:12px 14px;margin-bottom:8px;border-left:5px solid var(--teal);animation:up .3s backwards}
+.res b{display:block;font-size:13px;color:var(--teal)}.res span{display:block;overflow-wrap:anywhere}
+mark{background:var(--sun);color:var(--ink);border-radius:3px;padding:0 1px}
+.empty{text-align:center;opacity:.65;padding:40px 20px}
+.fab{display:block;width:100%;background:var(--sun);font-weight:700;padding:16px;border-radius:30px;margin:6px 0 14px;transition:.15s}
+.doc{display:flex;gap:12px;align-items:center;background:#fff;border-radius:14px;padding:12px;margin-bottom:8px;transition:.3s;animation:up .3s backwards}
+.doc.out{opacity:0;transform:translateX(60px)}
+.doc div{flex:1;min-width:0}.doc b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.doc small{opacity:.6}
+.ty{font-style:normal;font-weight:700;font-size:12px;color:#fff;border-radius:10px;padding:10px 6px;min-width:58px;text-align:center;background:#217346}
+.ty.Word{background:#2B579A}.ty.PowerPoint{background:#D24726}.ty.Texte{background:#667}
+.del{color:var(--bad);font-size:13px;font-weight:600;padding:8px}
+.lnk{color:var(--bad);display:block;margin:14px auto;font-weight:600}
+nav{position:fixed;left:0;right:0;bottom:0;display:flex;background:#fff;padding-bottom:env(safe-area-inset-bottom);box-shadow:0 -4px 22px #0f2a3320;transition:transform .4s cubic-bezier(.2,.8,.2,1);z-index:3}
+body[data-s=home] nav{transform:translateY(110%)}
+nav button{flex:1;padding:16px 4px;font-size:13px;font-weight:600;opacity:.55;position:relative;transition:.2s}
+nav button.on{opacity:1;color:var(--teal)}
+nav button.on:after{content:"";position:absolute;left:30%;right:30%;top:0;height:3px;border-radius:0 0 3px 3px;background:var(--sun)}
+#det{position:fixed;inset:0;background:var(--bg);z-index:5;display:flex;flex-direction:column;transform:translateY(100%);transition:transform .42s cubic-bezier(.2,.8,.2,1)}
+#det.on{transform:none}
+#det header{background:var(--ink);color:#fff;display:flex;align-items:center;gap:6px;padding:calc(env(safe-area-inset-top) + 10px) 8px 10px}
+#det header div{flex:1;min-width:0}#det header b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#det header small{opacity:.7}
+#det header button{width:44px;height:44px;font-size:22px;border-radius:50%}
+#db{flex:1;overflow:auto;padding:18px 18px calc(env(safe-area-inset-bottom) + 24px)}
+#db.f{animation:up .3s}
+.big{font-size:21px;line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere}
+.cell{background:#fff;border-radius:12px;padding:10px 14px;margin-bottom:8px;font-size:18px;white-space:pre-wrap;overflow-wrap:anywhere}
+.cell small{display:block;color:var(--teal);font-weight:700;font-size:12px}
+#dlg,#busy{position:fixed;inset:0;background:#0F2A33bb;display:grid;place-items:center;opacity:0;pointer-events:none;transition:.25s;z-index:9;padding:24px}
+#dlg.on,#busy.on{opacity:1;pointer-events:auto}
+#dlg div{background:#fff;border-radius:22px;padding:22px;max-width:340px;transform:scale(.88);transition:.3s cubic-bezier(.2,1.3,.4,1)}
+#dlg.on div{transform:none}#dlg p{margin:6px 0 18px;opacity:.75}
+#dlg nav{all:unset;display:flex;gap:10px}#dlg nav button{flex:1;padding:13px;border-radius:14px;background:var(--bg);opacity:1;font-size:16px}
+#dlg nav #dok{background:var(--ink);color:#fff}#dlg nav #dok.bad{background:var(--bad)}
+#busy{color:#fff;font-weight:600;text-align:center}
+#busy i{display:block;height:5px;width:200px;margin:14px auto 0;background:#ffffff33;border-radius:5px;overflow:hidden}
+#busy i:after{content:"";display:block;height:100%;width:40%;background:var(--sun);animation:sl 1s infinite alternate ease-in-out}
+@keyframes sl{from{margin-left:0}to{margin-left:60%}}
+#toast{position:fixed;left:16px;right:16px;bottom:90px;background:var(--bad);color:#fff;padding:12px 16px;border-radius:14px;z-index:10;transform:translateY(200%);transition:.35s}
+#toast.on{transform:none}
+</style></head>
+<body data-s="home">
+<section class="scr on" id="home">
+  <div class="wm">FIND <em>TIA</em><svg class="lens" viewBox="0 0 64 64" fill="none" stroke-linecap="round"><circle cx="26" cy="26" r="17" stroke="#fff" stroke-width="7"/><path d="M39 39 56 56" stroke="#FFC247" stroke-width="9"/></svg></div>
+  <p class="tag">Cherchez dans vos fichiers Word, Excel et PowerPoint, sans connexion.</p>
+  <button class="mb" data-go="search"><b>Rechercher</b><small>Un mot, un nombre, une phrase</small></button>
+  <button class="mb" data-go="docs"><b>Mes documents</b><small id="hc">Aucun document en mémoire</small></button>
+  <button class="mb q" data-q><b>Quitter</b><small>Vos documents restent en mémoire</small></button>
+</section>
+<section class="scr l" id="search">
+  <h1>Rechercher</h1>
+  <div class="sf"><input id="q" type="search" placeholder="Que cherchez-vous ?" autocomplete="off"><button id="cl" aria-label="Effacer">✕</button></div>
+  <details class="opt"><summary>Options de recherche</summary><div class="panel">
+    <label class="chip"><input type="checkbox" id="oc"><span>Respecter la casse</span></label>
+    <label class="chip"><input type="checkbox" id="ow"><span>Mot entier</span></label>
+    <label class="chip"><input type="checkbox" id="oa"><span>Respecter les accents</span></label>
+    <select id="om"><option value="phrase">Expression exacte</option><option value="words">Tous les mots, dans le désordre</option><option value="wild">Jokers : * = plusieurs lettres, ? = une lettre</option><option value="regex">Expression régulière</option></select>
+    <select id="os"><option value="all">Tous les documents</option></select>
+  </div></details>
+  <div id="info"></div><div id="list"></div>
+</section>
+<section class="scr l" id="docs">
+  <h1>Mes documents</h1>
+  <button class="fab" id="add">+ Ajouter des fichiers</button>
+  <input type="file" id="fi" multiple hidden accept=".xlsx,.xlsm,.xlsb,.xls,.ods,.csv,.docx,.docm,.dotx,.pptx,.pptm,.ppsx,.potx,.txt,.md">
+  <div id="dl"></div>
+</section>
+<nav><button data-go="home">Accueil</button><button data-go="search">Rechercher</button><button data-go="docs">Documents</button><button data-q>Quitter</button></nav>
+<div id="det"><header><button id="dx" aria-label="Fermer">←</button><div><b id="dt"></b><small id="dsub"></small></div><button id="dp" aria-label="Précédent">‹</button><button id="dn" aria-label="Suivant">›</button></header><div id="db"></div></div>
+<div id="dlg"><div><h2 id="dtt"></h2><p id="dm"></p><nav><button id="dno">Annuler</button><button id="dok"></button></nav></div></div>
+<div id="busy"><div><span id="bt"></span><i></i></div></div>
+<div id="toast"></div>
+<script src="lib/jszip.min.js"></script><script src="lib/xlsx.full.min.js"></script><script src="app.js"></script>
+</body></html>
