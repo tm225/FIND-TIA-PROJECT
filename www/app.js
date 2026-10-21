@@ -54,23 +54,24 @@ async function parse(f){
 /* ---------- Recherche ---------- */
 const txt=(u,a)=>a?(u.n??=norm(u.t)):(u.f??=fold(u.t));
 function build(q){
- const c=$('#oc').checked,w=$('#ow').checked,a=$('#oa').checked,m=$('#om').value,E=s=>s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');q=a?norm(q):fold(q);
- let p=m=='regex'?[q]:m=='words'?q.split(/\s+/).filter(Boolean).map(E):m=='wild'?[[...q].map(x=>x=='*'?'\\S*':x=='?'?'\\S':E(x)).join('')]:[E(q)];
+ const c=$('#oc').checked,w=$('#ow').checked,a=$('#oa').checked,m=$('#om').value,E=s=>s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');q=(a?norm(q):fold(q)).trim();
+ let p=m=='regex'?[q]:m=='words'?q.split(/\s+/).filter(Boolean).map(E):m=='wild'?[[...q].map(x=>x=='*'?'\\S*':x=='?'?'\\S':x==' '?'\\s+':E(x)).join('')]:[E(q).replace(/ +/g,'\\s+')];
  if(w){const W='[A-Za-z0-9_\\u00C0-\\u024F]';p=p.map(x=>`(?<!${W})(?:${x})(?!${W})`)}
  const f=c?'':'i';return{t:p.map(x=>new RegExp(x,f)),h:new RegExp(p.join('|'),'g'+f),a}}
 function rng(s){const z=S.rx.a?norm(s):fold(s),o=[],r=S.rx.h;r.lastIndex=0;let m;while((m=r.exec(z))){if(!m[0]){r.lastIndex++;continue}o.push([m.index,m.index+m[0].length])}return o}
 function mk(s,from=0,to=s.length){let h='',p=from;for(const[a,b]of rng(s)){if(b<=from||a>=to)continue;const x=Math.max(a,from),y=Math.min(b,to);h+=esc(s.slice(p,x))+'<mark>'+esc(s.slice(x,y))+'</mark>';p=y}return h+esc(s.slice(p,to))}
 function snip(u){const r=rng(u.t)[0]||[0,0],a=Math.max(0,r[0]-50),b=Math.min(u.t.length,r[1]+110);return(a?'…':'')+mk(u.t,a,b)+(b<u.t.length?'…':'')}
 function run(){
- S.res=[];S.rx=null;S.n=150;const q=$('#q').value;
+ S.res=[];S.rx=null;S.n=150;S.scan=0;const q=$('#q').value.trim();
  if(q){try{S.rx=build(q)}catch(e){$('#info').textContent='Expression invalide';$('#list').innerHTML='';return}
-  const sc=$('#os').value;for(const d of S.docs){if(sc!='all'&&d.id!=sc)continue;const ot=sc!='all'?$('#ot').value:'all';d.units.forEach((u,i)=>{if(ot!='all'&&u.sh!=ot)return;const z=txt(u,S.rx.a);if(S.rx.t.every(r=>r.test(z)))S.res.push([d,i])})}}
+  const sc=$('#os').value;for(const d of S.docs){if(sc!='all'&&d.id!=sc)continue;const ot=sc!='all'?$('#ot').value:'all';d.units.forEach((u,i)=>{if(ot!='all'&&u.sh!=ot)return;S.scan++;const z=txt(u,S.rx.a);if(S.rx.t.every(r=>r.test(z)))S.res.push([d,i])})}}
  draw()}
 function draw(){
- const L=$('#list'),I=$('#info'),q=$('#q').value;
+ const L=$('#list'),I=$('#info'),q=$('#q').value.trim();
  if(!S.docs.length){I.textContent='';L.innerHTML='<div class="empty">Aucun document en mémoire.<br>Ajoutez d’abord un fichier dans « Documents ».</div>';return}
  if(!q){I.textContent='';L.innerHTML='<div class="empty">Tapez ce que vous cherchez.<br>La recherche se fait dans tous vos documents.</div>';return}
- if(!S.res.length){I.textContent='';L.innerHTML='<div class="empty">Aucun résultat pour « '+esc(q)+' ».</div>';return}
+ if(!S.res.length){I.textContent='';const o=[];if($('#oc').checked)o.push('Respecter la casse');if($('#ow').checked)o.push('Mot entier');if($('#oa').checked)o.push('Respecter les accents');if($('#om').value!='phrase')o.push($('#om').selectedOptions[0].text.split(' :')[0]);if($('#os').value!='all')o.push('un seul document');
+ L.innerHTML='<div class="empty">Aucun résultat pour « '+esc(q)+' » parmi '+S.scan+' éléments lus.'+(o.length?'<br><br>Options actives : '+esc(o.join(', '))+'<button class="fab" id="rst" style="margin-top:12px">Réinitialiser les options</button>':'')+'</div>';return}
  I.textContent=S.res.length+' résultat'+(S.res.length>1?'s':'')+' dans '+new Set(S.res.map(r=>r[0].id)).size+' document(s)';
  let h='',last;S.res.slice(0,S.n).forEach(([d,i],j)=>{if(d!==last){h+='<h3>'+esc(d.name)+'</h3>';last=d}h+='<button class="res" data-j="'+j+'"><b>'+esc(d.units[i].loc)+'</b><span>'+snip(d.units[i])+'</span></button>'});
  if(S.res.length>S.n)h+='<button class="fab" id="more">Afficher plus</button>';
@@ -104,7 +105,7 @@ async function add(files){
  const B=$('#busy');B.classList.add('on');
  for(const f of files){$('#bt').textContent='Lecture de '+f.name+'…';await wait(60);
   try{const d=await parse(f),o=S.docs.find(x=>x.name==d.name&&x.size==d.size);if(o){await DB.del(o.id);S.docs=S.docs.filter(x=>x!=o)}await DB.put(d);S.docs.push(d)}catch(e){toast(f.name+' : '+(e.message||e))}}
- B.classList.remove('on');fill();if($('#q').value)run()}
+ B.classList.remove('on');fill();if($('#q').value.trim())run()}
 
 /* ---------- Démarrage ---------- */
 document.addEventListener('click',async e=>{
@@ -113,6 +114,7 @@ document.addEventListener('click',async e=>{
  else if('q' in t.dataset)quit();
  else if(t.id=='add')$('#fi').click();
  else if(t.id=='cl'){$('#q').value='';run();$('#q').focus()}
+ else if(t.id=='rst'){$$('#oc,#ow,#oa').forEach(x=>x.checked=false);$('#om').value='phrase';$('#os').value='all';tabSel();run()}
  else if(t.id=='more'){S.n+=150;draw()}
  else if(t.dataset.j)show(+t.dataset.j);
  else if(t.id=='dx')$('#det').classList.remove('on');
