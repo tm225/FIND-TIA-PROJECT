@@ -17,18 +17,27 @@ const ln=n=>n.localName,kids=(n,l)=>[...n.childNodes].filter(c=>c.nodeType==1&&(
 const xml=async(z,p)=>z.file(p)?new DOMParser().parseFromString(await z.file(p).async('string'),'application/xml'):null;
 const ptx=el=>{let s='';(function w(n){for(const c of n.childNodes){if(c.nodeType!=1)continue;const l=ln(c);if(l=='t')s+=c.textContent;else if(l=='tab')s+='\t';else if(l=='br'||l=='cr')s+='\n';else if(!['p','txbxContent','Fallback','delText','instrText'].includes(l))w(c)}})(el);return s.trim()};
 
-function sheets(wb,u,h){
+function sheets(wb,u,h,m){
+ const X=XLSX.utils;
  for(const n of wb.SheetNames){const ws=wb.Sheets[n];let a=1e9,b=-1,c=1e9,d=-1;
-  for(const k in ws){if(k[0]=='!')continue;const x=XLSX.utils.decode_cell(k);a=Math.min(a,x.r);b=Math.max(b,x.r);c=Math.min(c,x.c);d=Math.max(d,x.c)}
-  if(b<0)continue;ws['!ref']=XLSX.utils.encode_range({s:{r:a,c},e:{r:b,c:d}});
-  XLSX.utils.sheet_to_json(ws,{header:1,raw:false,defval:''}).forEach((row,i)=>{
-   const cells=row.map(v=>String(v).trim());while(cells.length&&!cells[cells.length-1])cells.pop();if(!cells.length)return;
-   if(!h[n])h[n]=cells;u.push({k:'x',loc:n+' · Ligne '+(a+i+1),sh:n,c0:c,cells,t:cells.filter(Boolean).join(' | ')})})}}
+  for(const k in ws){if(k[0]=='!'||(ws[k].t=='z'&&!ws[k].f))continue;const x=X.decode_cell(k);a=Math.min(a,x.r);b=Math.max(b,x.r);c=Math.min(c,x.c);d=Math.max(d,x.c)}
+  if(b<0)continue;
+  m[n]={af:ws['!autofilter']&&ws['!autofilter'].ref,hc:(ws['!cols']||[]).map((x,i)=>x&&x.hidden?i:-1).filter(i=>i>=0)};
+  for(let r=a;r<=b;r++){const cells=[],fx=[],nt=[];let any=0;
+   for(let j=c;j<=d;j++){const z=ws[X.encode_cell({r,c:j})];let v='',f='',t='';
+    if(z){v=String(z.w!=null?z.w:z.v!=null?z.v:'').trim();if(z.f)f='='+z.f;t=[(z.c||[]).map(o=>o.t).join(' '),z.l&&z.l.Target||''].filter(Boolean).join(' ').trim()}
+    cells.push(v);fx.push(f);nt.push(t);if(v||f||t)any=1}
+   if(!any)continue;
+   while(cells.length&&!cells[cells.length-1]&&!fx[cells.length-1]&&!nt[cells.length-1]){cells.pop();fx.pop();nt.pop()}
+   if(!h[n])h[n]=cells;
+   const hid=!!(ws['!rows']&&ws['!rows'][r]&&ws['!rows'][r].hidden);
+   u.push({k:'x',loc:n+' · Ligne '+(r+1),sh:n,c0:c,cells,fx,nt,hid,t:cells.flatMap((v,i)=>[v,fx[i],nt[i]]).filter(Boolean).join(' | ')})}}}
 
 async function parse(f){
- const buf=await f.arrayBuffer(),e=f.name.split('.').pop().toLowerCase(),u=[],h={};let ty,lab,tabs;
- if(/^(xlsx|xlsm|xlsb|xls|ods)$/.test(e)){ty='Excel';lab='lignes';const wb=XLSX.read(buf,{type:'array'});tabs=wb.SheetNames;sheets(wb,u,h)}
- else if(e=='csv'){ty='Excel';lab='lignes';const wb=XLSX.read(new TextDecoder().decode(buf),{type:'string'});tabs=wb.SheetNames;sheets(wb,u,h)}
+ const buf=await f.arrayBuffer(),e=f.name.split('.').pop().toLowerCase(),u=[],h={};let ty,lab,tabs,meta={};
+ if(/^(xlsx|xlsm|xlsb|xls|ods)$/.test(e)){ty='Excel';lab='lignes';const wb=XLSX.read(buf,{type:'array',cellStyles:true,sheetStubs:true});tabs=wb.SheetNames;sheets(wb,u,h,meta);
+  if(/^xls[xm]$/.test(e)){try{const z=await JSZip.loadAsync(buf);for(const p of Object.keys(z.files).filter(n=>/^xl\/drawings\/drawing\d+\.xml$/.test(n))){const t=all(await xml(z,p)).filter(x=>ln(x)=='p').map(ptx).filter(Boolean);if(t.length)u.push({k:'p',loc:'Dessin / zone de texte ('+p.match(/\d+/)[0]+')',t:t.join('\n')})}}catch(_){}}}
+ else if(e=='csv'){ty='Excel';lab='lignes';const wb=XLSX.read(new TextDecoder().decode(buf),{type:'string',sheetStubs:true});tabs=wb.SheetNames;sheets(wb,u,h,meta)}
  else if(/^(docx|docm|dotx)$/.test(e)){ty='Word';lab='éléments';const z=await JSZip.loadAsync(buf),
   L={header:'En-tête',footer:'Pied de page',footnotes:'Notes',endnotes:'Notes de fin',comments:'Commentaires'};
   for(const p of Object.keys(z.files).filter(n=>/^word\/(document|header\d*|footer\d*|footnotes|endnotes|comments)\.xml$/.test(n))){
@@ -49,7 +58,7 @@ async function parse(f){
  else if(/^(txt|md|log)$/.test(e)){ty='Texte';lab='lignes';new TextDecoder().decode(buf).split(/\r?\n/).forEach((t,i)=>{if(t.trim())u.push({k:'p',loc:'Ligne '+(i+1),t})})}
  else throw new Error('format non pris en charge (les anciens .doc et .ppt doivent être enregistrés en .docx / .pptx)');
  if(!u.length)throw new Error('aucun texte trouvé');
- return{id:Date.now()+Math.random(),name:f.name,size:f.size,type:ty,lab,units:u,heads:h,tabs,added:Date.now()}}
+ return{id:Date.now()+Math.random(),name:f.name,size:f.size,type:ty,lab,units:u,heads:h,tabs,meta,added:Date.now()}}
 
 /* ---------- Recherche ---------- */
 const txt=(u,a)=>a?(u.n??=norm(u.t)):(u.f??=fold(u.t));
@@ -64,22 +73,26 @@ function snip(u){const r=rng(u.t)[0]||[0,0],a=Math.max(0,r[0]-50),b=Math.min(u.t
 function run(){
  S.res=[];S.rx=null;S.n=150;S.scan=0;const q=$('#q').value.trim();
  if(q){try{S.rx=build(q)}catch(e){$('#info').textContent='Expression invalide';$('#list').innerHTML='';return}
-  const sc=$('#os').value;for(const d of S.docs){if(sc!='all'&&d.id!=sc)continue;const ot=sc!='all'?$('#ot').value:'all';d.units.forEach((u,i)=>{if(ot!='all'&&u.sh!=ot)return;S.scan++;const z=txt(u,S.rx.a);if(S.rx.t.every(r=>r.test(z)))S.res.push([d,i])})}}
+  const sc=$('#os').value;for(const d of S.docs){if(sc!='all'&&d.id!=sc)continue;const ot=sc!='all'?$('#ot').value:'all';d.units.forEach((u,i)=>{if(ot!='all'&&u.sh!=ot)return;if($('#oh').checked&&u.hid)return;S.scan++;const z=txt(u,S.rx.a);if(S.rx.t.every(r=>r.test(z)))S.res.push([d,i])})}}
  draw()}
+const locOf=u=>u.loc+(u.hid?' · ligne masquée':'');
 function draw(){
  const L=$('#list'),I=$('#info'),q=$('#q').value.trim();
  if(!S.docs.length){I.textContent='';L.innerHTML='<div class="empty">Aucun document en mémoire.<br>Ajoutez d’abord un fichier dans « Documents ».</div>';return}
  if(!q){I.textContent='';L.innerHTML='<div class="empty">Tapez ce que vous cherchez.<br>La recherche se fait dans tous vos documents.</div>';return}
- if(!S.res.length){I.textContent='';const o=[];if($('#oc').checked)o.push('Respecter la casse');if($('#ow').checked)o.push('Mot entier');if($('#oa').checked)o.push('Respecter les accents');if($('#om').value!='phrase')o.push($('#om').selectedOptions[0].text.split(' :')[0]);if($('#os').value!='all')o.push('un seul document');
+ if(!S.res.length){I.textContent='';const o=[];if($('#oc').checked)o.push('Respecter la casse');if($('#ow').checked)o.push('Mot entier');if($('#oh').checked)o.push('Ignorer les lignes masquées');if($('#oa').checked)o.push('Respecter les accents');if($('#om').value!='phrase')o.push($('#om').selectedOptions[0].text.split(' :')[0]);if($('#os').value!='all')o.push('un seul document'+(!$('#ot').hidden&&$('#ot').value!='all'?' (onglet « '+$('#ot').value+' » seulement)':''));
  L.innerHTML='<div class="empty">Aucun résultat pour « '+esc(q)+' » parmi '+S.scan+' éléments lus.'+(o.length?'<br><br>Options actives : '+esc(o.join(', '))+'<button class="fab" id="rst" style="margin-top:12px">Réinitialiser les options</button>':'')+'</div>';return}
  I.textContent=S.res.length+' résultat'+(S.res.length>1?'s':'')+' dans '+new Set(S.res.map(r=>r[0].id)).size+' document(s)';
- let h='',last;S.res.slice(0,S.n).forEach(([d,i],j)=>{if(d!==last){h+='<h3>'+esc(d.name)+'</h3>';last=d}h+='<button class="res" data-j="'+j+'"><b>'+esc(d.units[i].loc)+'</b><span>'+snip(d.units[i])+'</span></button>'});
+ let h='',last;S.res.slice(0,S.n).forEach(([d,i],j)=>{if(d!==last){h+='<h3>'+esc(d.name)+'</h3>';last=d}h+='<button class="res" data-j="'+j+'"><b>'+esc(locOf(d.units[i]))+'</b><span>'+snip(d.units[i])+'</span></button>'});
  if(S.res.length>S.n)h+='<button class="fab" id="more">Afficher plus</button>';
  L.innerHTML=h}
 function show(j){
  S.i=j;const[d,i]=S.res[j],u=d.units[i],hd=d.heads[u.sh];let h;
- $('#dt').textContent=d.name;$('#dsub').textContent=u.loc+'  ·  '+(j+1)+' / '+S.res.length;
- h=u.cells?u.cells.map((v,x)=>v?'<div class="cell"><small>'+(u.k=='x'?col(u.c0+x)+(hd&&hd!==u.cells&&hd[x]?' · '+esc(hd[x]):''):'Cellule '+(x+1))+'</small>'+mk(v)+'</div>':'').join(''):'<p class="big">'+mk(u.t)+'</p>';
+ $('#dt').textContent=d.name;$('#dsub').textContent=locOf(u)+'  ·  '+(j+1)+' / '+S.res.length;
+ const mt=(d.meta&&d.meta[u.sh])||{};
+ h=u.cells?(u.hid?'<div class="note">Ligne masquée (par un filtre ou manuellement)</div>':'')+(mt.af?'<div class="note">Filtre automatique sur la plage '+esc(mt.af)+'</div>':'')+u.cells.map((v,x)=>{const f=u.fx&&u.fx[x],n=u.nt&&u.nt[x];if(!(v||f||n))return'';
+  const lb=u.k=='x'?col(u.c0+x)+(hd&&hd!==u.cells&&hd[x]?' · '+esc(hd[x]):'')+((mt.hc||[]).includes(u.c0+x)?' · colonne masquée':''):'Cellule '+(x+1);
+  return'<div class="cell"><small>'+lb+'</small>'+(v?mk(v):'<i>(vide)</i>')+(f?'<em class="fx">'+mk(f)+'</em>':'')+(n?'<em class="nt">'+mk(n)+'</em>':'')+'</div>'}).join(''):'<p class="big">'+mk(u.t)+'</p>';
  const b=$('#db');b.innerHTML=h;b.scrollTop=0;b.classList.remove('f');void b.offsetWidth;b.classList.add('f');$('#det').classList.add('on')}
 
 /* ---------- Écrans, dialogues, quitter ---------- */
@@ -114,7 +127,7 @@ document.addEventListener('click',async e=>{
  else if('q' in t.dataset)quit();
  else if(t.id=='add')$('#fi').click();
  else if(t.id=='cl'){$('#q').value='';run();$('#q').focus()}
- else if(t.id=='rst'){$$('#oc,#ow,#oa').forEach(x=>x.checked=false);$('#om').value='phrase';$('#os').value='all';tabSel();run()}
+ else if(t.id=='rst'){$$('#oc,#ow,#oa,#oh').forEach(x=>x.checked=false);$('#om').value='phrase';$('#os').value='all';tabSel();run()}
  else if(t.id=='more'){S.n+=150;draw()}
  else if(t.dataset.j)show(+t.dataset.j);
  else if(t.id=='dx')$('#det').classList.remove('on');
@@ -124,7 +137,7 @@ document.addEventListener('click',async e=>{
  else if(t.id=='delall'&&await ask('Tout supprimer ?','Les '+S.docs.length+' documents seront retirés de la mémoire de l’application.','Tout supprimer',1)){await DB.clr();S.docs=[];fill();run()}});
 $('#fi').onchange=e=>{const f=[...e.target.files];e.target.value='';if(f.length)add(f)};
 let tm;$('#q').oninput=()=>{clearTimeout(tm);tm=setTimeout(run,250)};
-$$('#oc,#ow,#oa,#om,#ot').forEach(x=>x.onchange=run);$('#os').onchange=()=>{tabSel();run()};
+$$('#oc,#ow,#oa,#oh,#om,#ot').forEach(x=>x.onchange=run);$('#os').onchange=()=>{tabSel();run()};
 let sx=0;$('#det').addEventListener('touchstart',e=>sx=e.touches[0].clientX,{passive:true});
 $('#det').addEventListener('touchend',e=>{const d=e.changedTouches[0].clientX-sx;if(d<-70&&S.i<S.res.length-1)show(S.i+1);else if(d>70&&S.i>0)show(S.i-1)},{passive:true});
 function back(){if(cancel)cancel();else if($('#det').classList.contains('on'))$('#det').classList.remove('on');else if(cur!='home')go('home');else quit()}

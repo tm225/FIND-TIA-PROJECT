@@ -75,6 +75,9 @@ nav button.on:after{content:"";position:absolute;left:30%;right:30%;top:0;height
 #busy i{display:block;height:5px;width:200px;margin:14px auto 0;background:#ffffff33;border-radius:5px;overflow:hidden}
 #busy i:after{content:"";display:block;height:100%;width:40%;background:var(--sun);animation:sl 1s infinite alternate ease-in-out}
 @keyframes sl{from{margin-left:0}to{margin-left:60%}}
+.note{background:#FFC24744;border-radius:10px;padding:8px 12px;margin-bottom:8px;font-size:14px}
+.fx{display:block;font-style:normal;font-family:monospace;font-size:14px;color:#0b6b64;margin-top:4px}
+.nt{display:block;font-size:15px;opacity:.8;margin-top:4px}
 #toast{position:fixed;left:16px;right:16px;bottom:90px;background:var(--bad);color:#fff;padding:12px 16px;border-radius:14px;z-index:10;transform:translateY(200%);transition:.35s}
 #toast.on{transform:none}
 </style></head>
@@ -93,6 +96,7 @@ nav button.on:after{content:"";position:absolute;left:30%;right:30%;top:0;height
     <label class="chip"><input type="checkbox" id="oc"><span>Respecter la casse</span></label>
     <label class="chip"><input type="checkbox" id="ow"><span>Mot entier</span></label>
     <label class="chip"><input type="checkbox" id="oa"><span>Respecter les accents</span></label>
+    <label class="chip"><input type="checkbox" id="oh"><span>Ignorer les lignes masquées ou filtrées</span></label>
     <select id="om"><option value="phrase">Expression exacte</option><option value="words">Tous les mots, dans le désordre</option><option value="wild">Jokers : * = plusieurs lettres, ? = une lettre</option><option value="regex">Expression régulière</option></select>
     <select id="os"><option value="all">Tous les documents</option></select>
     <select id="ot" hidden></select>
