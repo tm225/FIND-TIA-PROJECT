@@ -93,7 +93,28 @@ function show(j){
  h=u.cells?(u.hid?'<div class="note">Ligne masquée (par un filtre ou manuellement)</div>':'')+(mt.af?'<div class="note">Filtre automatique sur la plage '+esc(mt.af)+'</div>':'')+u.cells.map((v,x)=>{const f=u.fx&&u.fx[x],n=u.nt&&u.nt[x];if(!(v||f||n))return'';
   const lb=u.k=='x'?col(u.c0+x)+(hd&&hd!==u.cells&&hd[x]?' · '+esc(hd[x]):'')+((mt.hc||[]).includes(u.c0+x)?' · colonne masquée':''):'Cellule '+(x+1);
   return'<div class="cell"><small>'+lb+'</small>'+(v?mk(v):'<i>(vide)</i>')+(f?'<em class="fx">'+mk(f)+'</em>':'')+(n?'<em class="nt">'+mk(n)+'</em>':'')+'</div>'}).join(''):'<p class="big">'+mk(u.t)+'</p>';
- const b=$('#db');b.innerHTML=h;b.scrollTop=0;b.classList.remove('f');void b.offsetWidth;b.classList.add('f');$('#det').classList.add('on')}
+ const b=$('#db');b.innerHTML=h+'<button class="fab" id="dv" style="margin-top:14px">Voir dans le document</button>';b.scrollTop=0;b.classList.remove('f');void b.offsetWidth;b.classList.add('f');$('#det').classList.add('on')}
+
+/* ---------- Visionneuse de document ---------- */
+const V={d:null,sh:null,list:[],n:150,jump:null};
+function openDoc(d,idx){
+ V.d=d;const u=idx!=null?d.units[idx]:null,tabs=(d.tabs||[]).filter(n=>d.units.some(x=>x.sh==n));
+ V.sh=tabs.length?(u&&u.sh?u.sh:tabs[0]):null;
+ $('#vt').textContent=d.name;const sel=$('#vs');sel.hidden=tabs.length<2;sel.innerHTML=tabs.map(n=>'<option>'+esc(n)+'</option>').join('');if(V.sh)sel.value=V.sh;
+ vrender(idx);$('#vw').classList.add('on')}
+function vrender(idx){
+ const d=V.d;V.list=[];d.units.forEach((u,i)=>{if(!V.sh||u.sh==V.sh)V.list.push(i)});
+ const p=idx!=null?V.list.indexOf(idx):0;V.n=Math.max(150,p+80);V.jump=idx!=null?idx:null;
+ $('#vsub').textContent=V.list.length+' '+d.lab+(V.sh?' · '+V.sh:'');vdraw()}
+function vdraw(){
+ const d=V.d,L=V.list.slice(0,V.n),hl=t=>S.rx?mk(t):esc(t);let h;
+ if(V.sh&&L.length){const mc=Math.max(1,...L.map(i=>d.units[i].cells.length)),c0=d.units[L[0]].c0;
+  h='<table><thead><tr><th></th>'+Array.from({length:mc},(_,x)=>'<th>'+col(c0+x)+'</th>').join('')+'</tr></thead><tbody>'+L.map(i=>{const u=d.units[i];
+   return'<tr id="r'+i+'"'+(u.hid?' class="hid"':'')+'><th>'+u.loc.match(/(\d+)$/)[1]+'</th>'+Array.from({length:mc},(_,x)=>{const f=u.fx&&u.fx[x];return'<td>'+hl(u.cells[x]||'')+(f?'<em class="fx">'+hl(f)+'</em>':'')+'</td>'}).join('')+'</tr>'}).join('')+'</tbody></table>'}
+ else h=L.map(i=>'<div class="blk" id="r'+i+'"><small>'+esc(locOf(d.units[i]))+'</small>'+hl(d.units[i].t)+'</div>').join('');
+ if(V.list.length>V.n)h+='<button class="fab" id="vm" style="margin-top:12px">Afficher plus ('+(V.list.length-V.n)+' restants)</button>';
+ $('#vb').innerHTML=h;
+ if(V.jump!=null){const e=$('#r'+V.jump);if(e){e.scrollIntoView({block:'center'});e.classList.add('flash')}V.jump=null}}
 
 /* ---------- Écrans, dialogues, quitter ---------- */
 const ORD=['home','search','docs'];let cur='home',cancel=null;
@@ -109,7 +130,7 @@ const wait=ms=>new Promise(r=>setTimeout(r,ms));
 /* ---------- Documents ---------- */
 function fill(){
  const kb=n=>n>1048576?(n/1048576).toFixed(1)+' Mo':Math.ceil(n/1024)+' Ko';
- $('#dl').innerHTML=S.docs.length?S.docs.map(d=>'<div class="doc" data-id="'+d.id+'"><i class="ty '+d.type+'">'+d.type+'</i><div><b>'+esc(d.name)+'</b><small>'+d.units.length+' '+d.lab+(d.tabs?' · '+d.tabs.length+' onglet'+(d.tabs.length>1?'s':''):'')+' · '+kb(d.size)+' · '+new Date(d.added).toLocaleDateString('fr-FR')+'</small></div><button class="del" data-del="'+d.id+'">Supprimer</button></div>').join('')
+ $('#dl').innerHTML=S.docs.length?S.docs.map(d=>'<div class="doc" data-id="'+d.id+'"><i class="ty '+d.type+'">'+d.type+'</i><div><b>'+esc(d.name)+'</b><small>'+d.units.length+' '+d.lab+(d.tabs?' · '+d.tabs.length+' onglet'+(d.tabs.length>1?'s':''):'')+' · '+kb(d.size)+' · '+new Date(d.added).toLocaleDateString('fr-FR')+'</small></div><button class="op" data-open="'+d.id+'">Ouvrir</button><button class="del" data-del="'+d.id+'">Supprimer</button></div>').join('')
   +'<button class="lnk" id="delall">Tout supprimer</button>':'<div class="empty">Aucun document.<br>Ajoutez des fichiers Word, Excel ou PowerPoint : ils restent ici, même hors ligne, jusqu’à ce que vous les supprimiez.</div>';
  $('#hc').textContent=S.docs.length?S.docs.length+' document'+(S.docs.length>1?'s':'')+' en mémoire':'Aucun document en mémoire';
  const s=$('#os'),v=s.value;s.innerHTML='<option value="all">Tous les documents</option>'+S.docs.map(d=>'<option value="'+d.id+'">'+esc(d.name)+'</option>').join('');s.value=S.docs.some(d=>d.id==v)?v:'all';tabSel()}
@@ -128,6 +149,10 @@ document.addEventListener('click',async e=>{
  else if(t.id=='add')$('#fi').click();
  else if(t.id=='cl'){$('#q').value='';run();$('#q').focus()}
  else if(t.id=='rst'){$$('#oc,#ow,#oa,#oh').forEach(x=>x.checked=false);$('#om').value='phrase';$('#os').value='all';tabSel();run()}
+ else if(t.dataset.open)openDoc(S.docs.find(x=>x.id==t.dataset.open))
+ else if(t.id=='dv'){const[d,i]=S.res[S.i];openDoc(d,i)}
+ else if(t.id=='vm'){V.n+=300;vdraw()}
+ else if(t.id=='vx')$('#vw').classList.remove('on')
  else if(t.id=='more'){S.n+=150;draw()}
  else if(t.dataset.j)show(+t.dataset.j);
  else if(t.id=='dx')$('#det').classList.remove('on');
@@ -135,12 +160,13 @@ document.addEventListener('click',async e=>{
  else if(t.id=='dn'&&S.i<S.res.length-1)show(S.i+1);
  else if(t.dataset.del){const d=S.docs.find(x=>x.id==t.dataset.del);if(await ask('Supprimer ce document ?',d.name,'Supprimer',1)){t.closest('.doc').classList.add('out');await wait(300);await DB.del(d.id);S.docs=S.docs.filter(x=>x!=d);fill();run()}}
  else if(t.id=='delall'&&await ask('Tout supprimer ?','Les '+S.docs.length+' documents seront retirés de la mémoire de l’application.','Tout supprimer',1)){await DB.clr();S.docs=[];fill();run()}});
+$('#vs').onchange=()=>{V.sh=$('#vs').value;vrender()};
 $('#fi').onchange=e=>{const f=[...e.target.files];e.target.value='';if(f.length)add(f)};
 let tm;$('#q').oninput=()=>{clearTimeout(tm);tm=setTimeout(run,250)};
 $$('#oc,#ow,#oa,#oh,#om,#ot').forEach(x=>x.onchange=run);$('#os').onchange=()=>{tabSel();run()};
 let sx=0;$('#det').addEventListener('touchstart',e=>sx=e.touches[0].clientX,{passive:true});
 $('#det').addEventListener('touchend',e=>{const d=e.changedTouches[0].clientX-sx;if(d<-70&&S.i<S.res.length-1)show(S.i+1);else if(d>70&&S.i>0)show(S.i-1)},{passive:true});
-function back(){if(cancel)cancel();else if($('#det').classList.contains('on'))$('#det').classList.remove('on');else if(cur!='home')go('home');else quit()}
+function back(){if(cancel)cancel();else if($('#vw').classList.contains('on'))$('#vw').classList.remove('on');else if($('#det').classList.contains('on'))$('#det').classList.remove('on');else if(cur!='home')go('home');else quit()}
 document.addEventListener('keydown',e=>{if(e.key=='Escape')back()});
 (async()=>{
  try{await DB.init();S.docs=await DB.all();S.docs.sort((a,b)=>a.added-b.added)}catch(e){toast('Stockage indisponible : '+e)}

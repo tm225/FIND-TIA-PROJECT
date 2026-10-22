@@ -57,9 +57,9 @@ nav button.on{opacity:1;color:var(--teal)}
 nav button.on:after{content:"";position:absolute;left:30%;right:30%;top:0;height:3px;border-radius:0 0 3px 3px;background:var(--sun)}
 #det{position:fixed;inset:0;background:var(--bg);z-index:5;display:flex;flex-direction:column;transform:translateY(100%);transition:transform .42s cubic-bezier(.2,.8,.2,1)}
 #det.on{transform:none}
-#det header{background:var(--ink);color:#fff;display:flex;align-items:center;gap:6px;padding:calc(env(safe-area-inset-top) + 10px) 8px 10px}
-#det header div{flex:1;min-width:0}#det header b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#det header small{opacity:.7}
-#det header button{width:44px;height:44px;font-size:22px;border-radius:50%}
+:is(#det,#vw) header{background:var(--ink);color:#fff;display:flex;align-items:center;gap:6px;padding:calc(env(safe-area-inset-top) + 10px) 8px 10px}
+:is(#det,#vw) header div{flex:1;min-width:0}:is(#det,#vw) header b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}:is(#det,#vw) header small{opacity:.7}
+:is(#det,#vw) header button{width:44px;height:44px;font-size:22px;border-radius:50%}
 #db{flex:1;overflow:auto;padding:18px 18px calc(env(safe-area-inset-bottom) + 24px)}
 #db.f{animation:up .3s}
 .big{font-size:21px;line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere}
@@ -78,6 +78,14 @@ nav button.on:after{content:"";position:absolute;left:30%;right:30%;top:0;height
 .note{background:#FFC24744;border-radius:10px;padding:8px 12px;margin-bottom:8px;font-size:14px}
 .fx{display:block;font-style:normal;font-family:monospace;font-size:14px;color:#0b6b64;margin-top:4px}
 .nt{display:block;font-size:15px;opacity:.8;margin-top:4px}
+#vw{position:fixed;inset:0;background:var(--bg);z-index:6;display:flex;flex-direction:column;transform:translateY(100%);transition:transform .42s cubic-bezier(.2,.8,.2,1)}
+#vw.on{transform:none}#vs{font:inherit;max-width:42%;padding:8px;border-radius:10px;border:0;background:#ffffff22;color:#fff}#vs option{color:#000}
+#vb{flex:1;overflow:auto;padding:12px 12px calc(env(safe-area-inset-bottom) + 24px)}
+table{border-collapse:collapse;font-size:15px}td,th{border:1px solid #cbd8db;padding:6px 10px;background:#fff;vertical-align:top;min-width:90px;max-width:280px;overflow-wrap:anywhere;text-align:left}
+thead th{position:sticky;top:-12px;background:#dfe8ea;z-index:1}tbody th{position:sticky;left:0;background:#dfe8ea;min-width:44px;text-align:right;z-index:1}
+tr.hid td{opacity:.5;background:#f3e8e4}tr.flash td{animation:fl 2.4s}@keyframes fl{0%,70%{background:var(--sun)}}
+.blk{background:#fff;border-radius:12px;padding:10px 14px;margin-bottom:8px;white-space:pre-wrap;overflow-wrap:anywhere}.blk small{display:block;color:var(--teal);font-weight:700}
+.op{color:var(--teal);font-size:13px;font-weight:600;padding:8px}
 #toast{position:fixed;left:16px;right:16px;bottom:90px;background:var(--bad);color:#fff;padding:12px 16px;border-radius:14px;z-index:10;transform:translateY(200%);transition:.35s}
 #toast.on{transform:none}
 </style></head>
@@ -111,6 +119,7 @@ nav button.on:after{content:"";position:absolute;left:30%;right:30%;top:0;height
 </section>
 <nav><button data-go="home">Accueil</button><button data-go="search">Rechercher</button><button data-go="docs">Documents</button><button data-q>Quitter</button></nav>
 <div id="det"><header><button id="dx" aria-label="Fermer">←</button><div><b id="dt"></b><small id="dsub"></small></div><button id="dp" aria-label="Précédent">‹</button><button id="dn" aria-label="Suivant">›</button></header><div id="db"></div></div>
+<div id="vw"><header><button id="vx" aria-label="Fermer">←</button><div><b id="vt"></b><small id="vsub"></small></div><select id="vs" hidden></select></header><div id="vb"></div></div>
 <div id="dlg"><div><h2 id="dtt"></h2><p id="dm"></p><nav><button id="dno">Annuler</button><button id="dok"></button></nav></div></div>
 <div id="busy"><div><span id="bt"></span><i></i></div></div>
 <div id="toast"></div>
