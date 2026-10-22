@@ -33,9 +33,22 @@ function sheets(wb,u,h,m){
    const hid=!!(ws['!rows']&&ws['!rows'][r]&&ws['!rows'][r].hidden);
    u.push({k:'x',loc:n+' · Ligne '+(r+1),sh:n,c0:c,cells,fx,nt,hid,t:cells.flatMap((v,i)=>[v,fx[i],nt[i]]).filter(Boolean).join(' | ')})}}}
 
+/* Seconde lecture des textes (chaînes partagées) si la première n'a pas tout lu */
+async function fixStrings(wb,buf){
+ try{const z=await JSZip.loadAsync(buf),sx=await xml(z,'xl/sharedStrings.xml'),
+  sst=sx?kids(sx.documentElement,'si').map(si=>all(si).filter(x=>ln(x)=='t'&&ln(x.parentNode)!='rPh').map(x=>x.textContent).join('')):[],
+  wx=await xml(z,'xl/workbook.xml'),rl=await xml(z,'xl/_rels/workbook.xml.rels'),rm={};
+  all(rl).filter(x=>ln(x)=='Relationship').forEach(x=>rm[x.getAttribute('Id')]=x.getAttribute('Target'));
+  for(const sh of all(wx).filter(x=>ln(x)=='sheet')){const ws=wb.Sheets[sh.getAttribute('name')];let p=rm[sh.getAttribute('r:id')];if(!ws||!p)continue;
+   const d=await xml(z,p[0]=='/'?p.slice(1):'xl/'+p);if(!d)continue;
+   for(const c of all(d).filter(x=>ln(x)=='c')){const t=c.getAttribute('t');if(t!='s'&&t!='inlineStr'&&t!='str')continue;
+    const ref=c.getAttribute('r'),o=ws[ref];if(o&&o.v!=null&&o.v!=='')continue;
+    const e=kids(c,'v')[0];let v=t=='s'?(e?sst[+e.textContent]:''):t=='str'?(e?e.textContent:''):all(c).filter(x=>ln(x)=='t').map(x=>x.textContent).join('');
+    if(v)ws[ref]=Object.assign({},o,{t:'s',v,w:v})}}}catch(_){}}
+
 async function parse(f){
  const buf=await f.arrayBuffer(),e=f.name.split('.').pop().toLowerCase(),u=[],h={};let ty,lab,tabs,meta={};
- if(/^(xlsx|xlsm|xlsb|xls|ods)$/.test(e)){ty='Excel';lab='lignes';const wb=XLSX.read(buf,{type:'array',cellStyles:true,sheetStubs:true});tabs=wb.SheetNames;sheets(wb,u,h,meta);
+ if(/^(xlsx|xlsm|xlsb|xls|ods)$/.test(e)){ty='Excel';lab='lignes';const wb=XLSX.read(buf,{type:'array',cellStyles:true,sheetStubs:true});if(/^xls[xm]$/.test(e))await fixStrings(wb,buf);tabs=wb.SheetNames;sheets(wb,u,h,meta);
   if(/^xls[xm]$/.test(e)){try{const z=await JSZip.loadAsync(buf);for(const p of Object.keys(z.files).filter(n=>/^xl\/drawings\/drawing\d+\.xml$/.test(n))){const t=all(await xml(z,p)).filter(x=>ln(x)=='p').map(ptx).filter(Boolean);if(t.length)u.push({k:'p',loc:'Dessin / zone de texte ('+p.match(/\d+/)[0]+')',t:t.join('\n')})}}catch(_){}}}
  else if(e=='csv'){ty='Excel';lab='lignes';const wb=XLSX.read(new TextDecoder().decode(buf),{type:'string',sheetStubs:true});tabs=wb.SheetNames;sheets(wb,u,h,meta)}
  else if(/^(docx|docm|dotx)$/.test(e)){ty='Word';lab='éléments';const z=await JSZip.loadAsync(buf),
@@ -58,6 +71,7 @@ async function parse(f){
  else if(/^(txt|md|log)$/.test(e)){ty='Texte';lab='lignes';new TextDecoder().decode(buf).split(/\r?\n/).forEach((t,i)=>{if(t.trim())u.push({k:'p',loc:'Ligne '+(i+1),t})})}
  else throw new Error('format non pris en charge (les anciens .doc et .ppt doivent être enregistrés en .docx / .pptx)');
  if(!u.length)throw new Error('aucun texte trouvé');
+ if(ty=='Excel'){const nt=u.reduce((a,x)=>a+(x.cells||[]).filter(v=>v&&isNaN(+v.replace(/[\s\u00a0,]/g,''))).length,0);if(!nt)toast(f.name+' : aucun texte lu dans ce fichier (seulement des nombres)')}
  return{id:Date.now()+Math.random(),name:f.name,size:f.size,type:ty,lab,units:u,heads:h,tabs,meta,added:Date.now()}}
 
 /* ---------- Recherche ---------- */
