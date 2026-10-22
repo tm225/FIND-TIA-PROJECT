@@ -88,7 +88,7 @@ function run(){
  S.res=[];S.rx=null;S.n=150;S.scan=0;const q=$('#q').value.trim();
  if(q){try{S.rx=build(q)}catch(e){$('#info').textContent='Expression invalide';$('#list').innerHTML='';return}
   const sc=$('#os').value;for(const d of S.docs){if(sc!='all'&&d.id!=sc)continue;const ot=sc!='all'?$('#ot').value:'all';d.units.forEach((u,i)=>{if(ot!='all'&&u.sh!=ot)return;if($('#oh').checked&&u.hid)return;S.scan++;const z=txt(u,S.rx.a);if(S.rx.t.every(r=>r.test(z)))S.res.push([d,i])})}}
- draw()}
+ draw();hsave()}
 const locOf=u=>u.loc+(u.hid?' · ligne masquée':'');
 function draw(){
  const L=$('#list'),I=$('#info'),q=$('#q').value.trim();
@@ -132,7 +132,7 @@ function vdraw(){
 
 /* ---------- Écrans, dialogues, quitter ---------- */
 const ORD=['home','search','docs'];let cur='home',cancel=null;
-function go(n){if(!ORD.includes(n))return;cur=n;document.body.dataset.s=n;ORD.forEach((s,i)=>{const e=$('#'+s);e.className='scr'+(s==n?' on':i<ORD.indexOf(n)?' l':'')});
+function go(n){if(!ORD.includes(n))return;cur=n;document.body.dataset.s=n;zsync();ORD.forEach((s,i)=>{const e=$('#'+s);e.className='scr'+(s==n?' on':i<ORD.indexOf(n)?' l':'')});
  $$('nav button[data-go]').forEach(b=>b.classList.toggle('on',b.dataset.go==n));
  if(n=='home'){const h=$('#home');h.classList.remove('play');void h.offsetWidth;h.classList.add('play')}}
 function ask(t,m,ok,bad,solo){return new Promise(r=>{$('#dno').hidden=!!solo;$('#dtt').textContent=t;$('#dm').textContent=m;const b=$('#dok');b.textContent=ok;b.className=bad?'bad':'';$('#dlg').classList.add('on');
@@ -149,15 +149,34 @@ function tick(){const d=new Date(),s=d.getSeconds()+d.getMilliseconds()/1000,m=d
 (function loop(){if(cur=='home'&&!document.hidden)tick();requestAnimationFrame(loop)})();
 
 /* ---------- Menu, thèmes, aide ---------- */
-const TN={lagune:1,savane:1,ci:1};
-function theme(n){document.body.dataset.t=n;$$('.sw button').forEach(b=>b.classList.toggle('on',b.dataset.th==n));try{localStorage.setItem('ft-theme',n)}catch(e){}}
+const THEMES=[['lagune','Lagune','#0F2A33','#FFC247','#EEF3F4'],['savane','Savane','#0D3B2E','#F28C28','#EDF4EF'],['ci','Côte d’Ivoire','#F77F00','#FFFFFF','#009E60'],['nuit','Nuit','#071013','#FFC247','#17272E'],['ocean','Océan','#0B2A4A','#38BDF8','#EAF2FB'],['rubis','Rubis','#3B0A24','#FFB3C1','#FBEFF3'],['amethyste','Améthyste','#24134A','#FFD166','#F1EEFB'],['laterite','Latérite','#3E1F14','#F4B860','#FAF1EA'],['soleil','Soleil','#3A2A00','#FFD43B','#FFF8E1']];
+const TN=Object.fromEntries(THEMES.map(x=>[x[0],1]));
+function theme(n){document.body.dataset.t=n;$$('.tg button').forEach(b=>b.classList.toggle('on',b.dataset.th==n));try{localStorage.setItem('ft-theme',n)}catch(e){}}
 const menu=on=>{$('#mn').classList.toggle('on',on);if(on)$('#mc').textContent=S.docs.length?S.docs.length+' en mémoire':''};
 const HELP='Expression exacte : trouve ce que vous tapez, tel quel.\nTous les mots : chaque mot peut se trouver n’importe où dans la ligne.\nJokers : * remplace plusieurs lettres, ? en remplace une (essayez tra*).\nExpression régulière : pour les recherches avancées.\n\nLes accents sont ignorés, sauf si « Respecter les accents » est coché. La recherche couvre les valeurs, les formules, les commentaires et tous les onglets.';
 const ABOUT='FIND TIA · version 1.0\n\nRecherche dans vos fichiers Word, Excel et PowerPoint.\nFonctionne sans connexion : vos documents restent dans le téléphone jusqu’à ce que vous les supprimiez.';
 function mact(m){menu(false);
  if(m=='search'||m=='docs')go(m);else if(m=='add'){go('docs');$('#fi').click()}
- else if(m=='help')ask('Aide à la recherche',HELP,'Fermer',0,1);else if(m=='about')ask('À propos',ABOUT,'Fermer',0,1);
+ else if(m=='help')ask('Aide à la recherche',HELP,'Fermer',0,1);else if(m=='about')apage();else if(m=='theme')tpage();else if(m=='hist')hpage();
  else if(m=='perm')popen();else if(m=='quit')quit()}
+
+/* ---------- Pages (historique, thèmes, à propos) ---------- */
+function openPage(t,html,act,sub){$('#hst').textContent=t;$('#hss').textContent=sub||'';$('#hb').innerHTML=html;const b=$('#hcl');b.hidden=!act;b.textContent=act||'';$('#hb').scrollTop=0;$('#hs').classList.add('on')}
+const pageClose=()=>$('#hs').classList.remove('on');
+const HK='ft-hist',hget=()=>{try{return JSON.parse(localStorage.getItem(HK))||[]}catch(e){return[]}},hset=l=>{try{localStorage.setItem(HK,JSON.stringify(l.slice(0,60)))}catch(e){}};
+let ht;function hsave(){clearTimeout(ht);ht=setTimeout(()=>{const q=$('#q').value.trim();if(q.length<2||!S.res.length)return;hset([{q,n:S.res.length,d:Date.now()}].concat(hget().filter(x=>x.q!=q)))},1500)}
+function hpage(){const l=hget();openPage('Historique',l.length?l.map((x,i)=>'<div class="hi"><button data-hq="'+i+'"><b>'+esc(x.q)+'</b><small>'+x.n+' résultat'+(x.n>1?'s':'')+' · '+new Date(x.d).toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+'</small></button><button class="hd" data-hd="'+i+'" aria-label="Supprimer">✕</button></div>').join(''):'<div class="empty">Aucune recherche pour le moment.<br>Vos recherches apparaîtront ici.</div>',l.length?'Effacer':'',l.length+' recherche'+(l.length>1?'s':''))}
+function tpage(){const c=document.body.dataset.t;openPage('Thèmes','<div class="tg">'+THEMES.map(x=>'<button data-th="'+x[0]+'" class="'+(x[0]==c?'on':'')+'"><i style="background:linear-gradient(90deg,'+x[2]+' 0 36%,'+x[3]+' 0 68%,'+x[4]+' 0)"></i><b>'+x[1]+'</b></button>').join('')+'</div>','',THEMES.length+' thèmes')}
+function apage(){openPage('À propos','<div class="ab"><h4>FIND TIA · version 1.0</h4><p>Une application de recherche dans vos fichiers Microsoft Office. Elle fonctionne comme la commande Rechercher d’Office, mais sur plusieurs documents à la fois, et sans connexion.</p><h4>Comment l’utiliser</h4><ol><li>Dans <b>Mes documents</b>, ajoutez vos fichiers Excel, Word ou PowerPoint.</li><li>Dans <b>Rechercher</b>, tapez un mot, un nombre ou une phrase.</li><li>Touchez un résultat pour voir tout son contenu en grand. Glissez le doigt pour passer au suivant.</li><li>Touchez <b>Voir dans le document</b> pour ouvrir le fichier à cet endroit.</li></ol><h4>Ce qui est lu</h4><ul><li>Excel : tous les onglets, valeurs, formules, commentaires, liens, lignes masquées ou filtrées.</li><li>Word : paragraphes, tableaux, zones de texte, en-têtes, pieds de page, notes.</li><li>PowerPoint : texte des diapositives et notes.</li><li>Texte : .txt et .md.</li></ul><h4>Recherche avancée</h4><p>Expression exacte, tous les mots, jokers (* et ?) et expression régulière. Options : casse, mot entier, accents, un seul document ou un seul onglet. Voir « Aide à la recherche » dans le menu.</p><h4>Confort</h4><ul><li>Zoom : pincez avec deux doigts ou utilisez les boutons + et −.</li><li>Historique de vos dernières recherches.</li><li>9 thèmes de couleurs, dont celui de la Côte d’Ivoire.</li></ul><h4>Vos données</h4><p>Tout reste dans votre téléphone. Aucun document n’est envoyé sur internet. Ils sont conservés jusqu’à ce que vous les supprimiez, ou que vous désinstalliez l’application.</p><h4>À savoir</h4><p>Les anciens formats .doc et .ppt ne sont pas lus : enregistrez-les en .docx ou .pptx. La mise en forme d’origine (couleurs, images, graphiques) n’est pas reproduite.</p><div class="cp">© 2026 FIND TIA · Tous droits réservés</div></div>','','Informations')}
+
+/* ---------- Zoom ---------- */
+let Z=1;try{Z=+localStorage.getItem('ft-z')||1}catch(e){}
+function setZ(z){Z=Math.max(.7,Math.min(2.2,Math.round(z*100)/100));document.documentElement.style.setProperty('--z',Z);$('#zl').textContent=Math.round(Z*100)+'%';try{localStorage.setItem('ft-z',Z)}catch(e){}}
+function zsync(){document.body.classList.toggle('zo',cur=='search'||$('#det').classList.contains('on')||$('#vw').classList.contains('on'))}
+let pz=null;const dist=e=>Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+['#list','#db','#vb'].forEach(s=>{const e=$(s);e.addEventListener('touchstart',v=>{if(v.touches.length==2)pz={d:dist(v),z:Z}},{passive:true});
+ e.addEventListener('touchmove',v=>{if(pz&&v.touches.length==2){v.preventDefault();S.pinch=1;setZ(pz.z*dist(v)/pz.d)}},{passive:false});
+ e.addEventListener('touchend',()=>{pz=null;setTimeout(()=>S.pinch=0,350)})});
 
 /* ---------- Autorisations (1re ouverture) ---------- */
 const PM=[{n:'Accès aux fichiers',d:'Pour lire les documents Excel, Word et PowerPoint que vous ajoutez.',pl:'Filesystem'},{n:'Notifications',d:'Pour vous prévenir quand la lecture d’un gros document se termine en arrière-plan.',pl:'LocalNotifications'}];
@@ -191,6 +210,11 @@ document.addEventListener('click',async e=>{
  else if(t.id=='add')$('#fi').click();
  else if(t.id=='hm')menu(true)
  else if(t.dataset.th)theme(t.dataset.th)
+ else if(t.dataset.z)setZ(t.dataset.z=='+'?Z+.15:t.dataset.z=='-'?Z-.15:1)
+ else if(t.id=='hx')pageClose()
+ else if(t.id=='hcl'){if(await ask('Effacer l’historique ?','Toutes les recherches enregistrées seront supprimées.','Effacer',1)){hset([]);hpage()}}
+ else if(t.dataset.hq){const x=hget()[+t.dataset.hq];pageClose();$('#q').value=x.q;go('search');run()}
+ else if(t.dataset.hd){const l=hget();l.splice(+t.dataset.hd,1);hset(l);hpage()}
  else if(t.id=='pgo'){if(t.dataset.d)pclose();else{t.disabled=true;await pdraw(true);t.disabled=false;t.textContent='Continuer';t.dataset.d=1}}
  else if(t.id=='pcl')pclose()
  else if(t.dataset.m)mact(t.dataset.m)
@@ -213,11 +237,11 @@ $('#fi').onchange=e=>{const f=[...e.target.files];e.target.value='';if(f.length)
 let tm;$('#q').oninput=()=>{clearTimeout(tm);tm=setTimeout(run,250)};
 $$('#oc,#ow,#oa,#oh,#om,#ot').forEach(x=>x.onchange=run);$('#os').onchange=()=>{tabSel();run()};
 let sx=0;$('#det').addEventListener('touchstart',e=>sx=e.touches[0].clientX,{passive:true});
-$('#det').addEventListener('touchend',e=>{const d=e.changedTouches[0].clientX-sx;if(d<-70&&S.i<S.res.length-1)show(S.i+1);else if(d>70&&S.i>0)show(S.i-1)},{passive:true});
-function back(){if(cancel)cancel();else if($('#pm').classList.contains('on'))pclose();else if($('#mn').classList.contains('on'))menu(false);else if($('#vw').classList.contains('on'))$('#vw').classList.remove('on');else if($('#det').classList.contains('on'))$('#det').classList.remove('on');else if(cur!='home')go('home');else quit()}
+$('#det').addEventListener('touchend',e=>{if(S.pinch)return;const d=e.changedTouches[0].clientX-sx;if(d<-70&&S.i<S.res.length-1)show(S.i+1);else if(d>70&&S.i>0)show(S.i-1)},{passive:true});
+function back(){if(cancel)cancel();else if($('#hs').classList.contains('on'))pageClose();else if($('#pm').classList.contains('on'))pclose();else if($('#mn').classList.contains('on'))menu(false);else if($('#vw').classList.contains('on'))$('#vw').classList.remove('on');else if($('#det').classList.contains('on'))$('#det').classList.remove('on');else if(cur!='home')go('home');else quit()}
 document.addEventListener('keydown',e=>{if(e.key=='Escape')back()});
 (async()=>{
  try{await DB.init();S.docs=await DB.all();S.docs.sort((a,b)=>a.added-b.added)}catch(e){toast('Stockage indisponible : '+e)}
  if(navigator.storage&&navigator.storage.persist)navigator.storage.persist();
- let th='lagune';try{th=localStorage.getItem('ft-theme')||th}catch(e){}theme(TN[th]?th:'lagune');fill();draw();go('home');let seen;try{seen=localStorage.getItem('ft-perm')}catch(e){}if(!seen)popen();
+ setZ(Z);['#det','#vw'].forEach(s=>new MutationObserver(zsync).observe($(s),{attributes:true,attributeFilter:['class']}));let th='lagune';try{th=localStorage.getItem('ft-theme')||th}catch(e){}theme(TN[th]?th:'lagune');fill();draw();go('home');let seen;try{seen=localStorage.getItem('ft-perm')}catch(e){}if(!seen)popen();
  const A=window.Capacitor&&Capacitor.Plugins&&Capacitor.Plugins.App;if(A)A.addListener('backButton',back)})();
