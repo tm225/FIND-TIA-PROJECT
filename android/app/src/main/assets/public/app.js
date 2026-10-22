@@ -17,18 +17,40 @@ const ln=n=>n.localName,kids=(n,l)=>[...n.childNodes].filter(c=>c.nodeType==1&&(
 const xml=async(z,p)=>z.file(p)?new DOMParser().parseFromString(await z.file(p).async('string'),'application/xml'):null;
 const ptx=el=>{let s='';(function w(n){for(const c of n.childNodes){if(c.nodeType!=1)continue;const l=ln(c);if(l=='t')s+=c.textContent;else if(l=='tab')s+='\t';else if(l=='br'||l=='cr')s+='\n';else if(!['p','txbxContent','Fallback','delText','instrText'].includes(l))w(c)}})(el);return s.trim()};
 
-function sheets(wb,u,h){
+function sheets(wb,u,h,m){
+ const X=XLSX.utils;
  for(const n of wb.SheetNames){const ws=wb.Sheets[n];let a=1e9,b=-1,c=1e9,d=-1;
-  for(const k in ws){if(k[0]=='!')continue;const x=XLSX.utils.decode_cell(k);a=Math.min(a,x.r);b=Math.max(b,x.r);c=Math.min(c,x.c);d=Math.max(d,x.c)}
-  if(b<0)continue;ws['!ref']=XLSX.utils.encode_range({s:{r:a,c},e:{r:b,c:d}});
-  XLSX.utils.sheet_to_json(ws,{header:1,raw:false,defval:''}).forEach((row,i)=>{
-   const cells=row.map(v=>String(v).trim());while(cells.length&&!cells[cells.length-1])cells.pop();if(!cells.length)return;
-   if(!h[n])h[n]=cells;u.push({k:'x',loc:n+' · Ligne '+(a+i+1),sh:n,c0:c,cells,t:cells.filter(Boolean).join(' | ')})})}}
+  for(const k in ws){if(k[0]=='!'||(ws[k].t=='z'&&!ws[k].f))continue;const x=X.decode_cell(k);a=Math.min(a,x.r);b=Math.max(b,x.r);c=Math.min(c,x.c);d=Math.max(d,x.c)}
+  if(b<0)continue;
+  m[n]={af:ws['!autofilter']&&ws['!autofilter'].ref,hc:(ws['!cols']||[]).map((x,i)=>x&&x.hidden?i:-1).filter(i=>i>=0)};
+  for(let r=a;r<=b;r++){const cells=[],fx=[],nt=[];let any=0;
+   for(let j=c;j<=d;j++){const z=ws[X.encode_cell({r,c:j})];let v='',f='',t='';
+    if(z){v=String(z.w!=null?z.w:z.v!=null?z.v:'').trim();if(z.f)f='='+z.f;t=[(z.c||[]).map(o=>o.t).join(' '),z.l&&z.l.Target||''].filter(Boolean).join(' ').trim()}
+    cells.push(v);fx.push(f);nt.push(t);if(v||f||t)any=1}
+   if(!any)continue;
+   while(cells.length&&!cells[cells.length-1]&&!fx[cells.length-1]&&!nt[cells.length-1]){cells.pop();fx.pop();nt.pop()}
+   if(!h[n])h[n]=cells;
+   const hid=!!(ws['!rows']&&ws['!rows'][r]&&ws['!rows'][r].hidden);
+   u.push({k:'x',loc:n+' · Ligne '+(r+1),sh:n,c0:c,cells,fx,nt,hid,t:cells.flatMap((v,i)=>[v,fx[i],nt[i]]).filter(Boolean).join(' | ')})}}}
+
+/* Seconde lecture des textes (chaînes partagées) si la première n'a pas tout lu */
+async function fixStrings(wb,buf){
+ try{const z=await JSZip.loadAsync(buf),sx=await xml(z,'xl/sharedStrings.xml'),
+  sst=sx?kids(sx.documentElement,'si').map(si=>all(si).filter(x=>ln(x)=='t'&&ln(x.parentNode)!='rPh').map(x=>x.textContent).join('')):[],
+  wx=await xml(z,'xl/workbook.xml'),rl=await xml(z,'xl/_rels/workbook.xml.rels'),rm={};
+  all(rl).filter(x=>ln(x)=='Relationship').forEach(x=>rm[x.getAttribute('Id')]=x.getAttribute('Target'));
+  for(const sh of all(wx).filter(x=>ln(x)=='sheet')){const ws=wb.Sheets[sh.getAttribute('name')];let p=rm[sh.getAttribute('r:id')];if(!ws||!p)continue;
+   const d=await xml(z,p[0]=='/'?p.slice(1):'xl/'+p);if(!d)continue;
+   for(const c of all(d).filter(x=>ln(x)=='c')){const t=c.getAttribute('t');if(t!='s'&&t!='inlineStr'&&t!='str')continue;
+    const ref=c.getAttribute('r'),o=ws[ref];if(o&&o.v!=null&&o.v!=='')continue;
+    const e=kids(c,'v')[0];let v=t=='s'?(e?sst[+e.textContent]:''):t=='str'?(e?e.textContent:''):all(c).filter(x=>ln(x)=='t').map(x=>x.textContent).join('');
+    if(v)ws[ref]=Object.assign({},o,{t:'s',v,w:v})}}}catch(_){}}
 
 async function parse(f){
- const buf=await f.arrayBuffer(),e=f.name.split('.').pop().toLowerCase(),u=[],h={};let ty,lab;
- if(/^(xlsx|xlsm|xlsb|xls|ods)$/.test(e)){ty='Excel';lab='lignes';sheets(XLSX.read(buf,{type:'array'}),u,h)}
- else if(e=='csv'){ty='Excel';lab='lignes';sheets(XLSX.read(new TextDecoder().decode(buf),{type:'string'}),u,h)}
+ const buf=await f.arrayBuffer(),e=f.name.split('.').pop().toLowerCase(),u=[],h={};let ty,lab,tabs,meta={};
+ if(/^(xlsx|xlsm|xlsb|xls|ods)$/.test(e)){ty='Excel';lab='lignes';const wb=XLSX.read(buf,{type:'array',cellStyles:true,sheetStubs:true});if(/^xls[xm]$/.test(e))await fixStrings(wb,buf);tabs=wb.SheetNames;sheets(wb,u,h,meta);
+  if(/^xls[xm]$/.test(e)){try{const z=await JSZip.loadAsync(buf);for(const p of Object.keys(z.files).filter(n=>/^xl\/drawings\/drawing\d+\.xml$/.test(n))){const t=all(await xml(z,p)).filter(x=>ln(x)=='p').map(ptx).filter(Boolean);if(t.length)u.push({k:'p',loc:'Dessin / zone de texte ('+p.match(/\d+/)[0]+')',t:t.join('\n')})}}catch(_){}}}
+ else if(e=='csv'){ty='Excel';lab='lignes';const wb=XLSX.read(new TextDecoder().decode(buf),{type:'string',sheetStubs:true});tabs=wb.SheetNames;sheets(wb,u,h,meta)}
  else if(/^(docx|docm|dotx)$/.test(e)){ty='Word';lab='éléments';const z=await JSZip.loadAsync(buf),
   L={header:'En-tête',footer:'Pied de page',footnotes:'Notes',endnotes:'Notes de fin',comments:'Commentaires'};
   for(const p of Object.keys(z.files).filter(n=>/^word\/(document|header\d*|footer\d*|footnotes|endnotes|comments)\.xml$/.test(n))){
@@ -49,61 +71,107 @@ async function parse(f){
  else if(/^(txt|md|log)$/.test(e)){ty='Texte';lab='lignes';new TextDecoder().decode(buf).split(/\r?\n/).forEach((t,i)=>{if(t.trim())u.push({k:'p',loc:'Ligne '+(i+1),t})})}
  else throw new Error('format non pris en charge (les anciens .doc et .ppt doivent être enregistrés en .docx / .pptx)');
  if(!u.length)throw new Error('aucun texte trouvé');
- return{id:Date.now()+Math.random(),name:f.name,size:f.size,type:ty,lab,units:u,heads:h,added:Date.now()}}
+ if(ty=='Excel'){const nt=u.reduce((a,x)=>a+(x.cells||[]).filter(v=>v&&isNaN(+v.replace(/[\s\u00a0,]/g,''))).length,0);if(!nt)toast(f.name+' : aucun texte lu dans ce fichier (seulement des nombres)')}
+ return{id:Date.now()+Math.random(),name:f.name,size:f.size,type:ty,lab,units:u,heads:h,tabs,meta,added:Date.now()}}
 
 /* ---------- Recherche ---------- */
 const txt=(u,a)=>a?(u.n??=norm(u.t)):(u.f??=fold(u.t));
 function build(q){
- const c=$('#oc').checked,w=$('#ow').checked,a=$('#oa').checked,m=$('#om').value,E=s=>s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');q=a?norm(q):fold(q);
- let p=m=='regex'?[q]:m=='words'?q.split(/\s+/).filter(Boolean).map(E):m=='wild'?[[...q].map(x=>x=='*'?'\\S*':x=='?'?'\\S':E(x)).join('')]:[E(q)];
+ const c=$('#oc').checked,w=$('#ow').checked,a=$('#oa').checked,m=$('#om').value,E=s=>s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');q=(a?norm(q):fold(q)).trim();
+ let p=m=='regex'?[q]:m=='words'?q.split(/\s+/).filter(Boolean).map(E):m=='wild'?[[...q].map(x=>x=='*'?'\\S*':x=='?'?'\\S':x==' '?'\\s+':E(x)).join('')]:[E(q).replace(/ +/g,'\\s+')];
  if(w){const W='[A-Za-z0-9_\\u00C0-\\u024F]';p=p.map(x=>`(?<!${W})(?:${x})(?!${W})`)}
  const f=c?'':'i';return{t:p.map(x=>new RegExp(x,f)),h:new RegExp(p.join('|'),'g'+f),a}}
 function rng(s){const z=S.rx.a?norm(s):fold(s),o=[],r=S.rx.h;r.lastIndex=0;let m;while((m=r.exec(z))){if(!m[0]){r.lastIndex++;continue}o.push([m.index,m.index+m[0].length])}return o}
 function mk(s,from=0,to=s.length){let h='',p=from;for(const[a,b]of rng(s)){if(b<=from||a>=to)continue;const x=Math.max(a,from),y=Math.min(b,to);h+=esc(s.slice(p,x))+'<mark>'+esc(s.slice(x,y))+'</mark>';p=y}return h+esc(s.slice(p,to))}
 function snip(u){const r=rng(u.t)[0]||[0,0],a=Math.max(0,r[0]-50),b=Math.min(u.t.length,r[1]+110);return(a?'…':'')+mk(u.t,a,b)+(b<u.t.length?'…':'')}
 function run(){
- S.res=[];S.rx=null;S.n=150;const q=$('#q').value;
+ S.res=[];S.rx=null;S.n=150;S.scan=0;const q=$('#q').value.trim();
  if(q){try{S.rx=build(q)}catch(e){$('#info').textContent='Expression invalide';$('#list').innerHTML='';return}
-  const sc=$('#os').value;for(const d of S.docs){if(sc!='all'&&d.id!=sc)continue;d.units.forEach((u,i)=>{const z=txt(u,S.rx.a);if(S.rx.t.every(r=>r.test(z)))S.res.push([d,i])})}}
+  const sc=$('#os').value;for(const d of S.docs){if(sc!='all'&&d.id!=sc)continue;const ot=sc!='all'?$('#ot').value:'all';d.units.forEach((u,i)=>{if(ot!='all'&&u.sh!=ot)return;if($('#oh').checked&&u.hid)return;S.scan++;const z=txt(u,S.rx.a);if(S.rx.t.every(r=>r.test(z)))S.res.push([d,i])})}}
  draw()}
+const locOf=u=>u.loc+(u.hid?' · ligne masquée':'');
 function draw(){
- const L=$('#list'),I=$('#info'),q=$('#q').value;
+ const L=$('#list'),I=$('#info'),q=$('#q').value.trim();
  if(!S.docs.length){I.textContent='';L.innerHTML='<div class="empty">Aucun document en mémoire.<br>Ajoutez d’abord un fichier dans « Documents ».</div>';return}
  if(!q){I.textContent='';L.innerHTML='<div class="empty">Tapez ce que vous cherchez.<br>La recherche se fait dans tous vos documents.</div>';return}
- if(!S.res.length){I.textContent='';L.innerHTML='<div class="empty">Aucun résultat pour « '+esc(q)+' ».</div>';return}
+ if(!S.res.length){I.textContent='';const o=[];if($('#oc').checked)o.push('Respecter la casse');if($('#ow').checked)o.push('Mot entier');if($('#oh').checked)o.push('Ignorer les lignes masquées');if($('#oa').checked)o.push('Respecter les accents');if($('#om').value!='phrase')o.push($('#om').selectedOptions[0].text.split(' :')[0]);if($('#os').value!='all')o.push('un seul document'+(!$('#ot').hidden&&$('#ot').value!='all'?' (onglet « '+$('#ot').value+' » seulement)':''));
+ L.innerHTML='<div class="empty">Aucun résultat pour « '+esc(q)+' » parmi '+S.scan+' éléments lus.'+(o.length?'<br><br>Options actives : '+esc(o.join(', '))+'<button class="fab" id="rst" style="margin-top:12px">Réinitialiser les options</button>':'')+'</div>';return}
  I.textContent=S.res.length+' résultat'+(S.res.length>1?'s':'')+' dans '+new Set(S.res.map(r=>r[0].id)).size+' document(s)';
- let h='',last;S.res.slice(0,S.n).forEach(([d,i],j)=>{if(d!==last){h+='<h3>'+esc(d.name)+'</h3>';last=d}h+='<button class="res" data-j="'+j+'"><b>'+esc(d.units[i].loc)+'</b><span>'+snip(d.units[i])+'</span></button>'});
+ let h='',last;S.res.slice(0,S.n).forEach(([d,i],j)=>{if(d!==last){h+='<h3>'+esc(d.name)+'</h3>';last=d}h+='<button class="res" data-j="'+j+'"><b>'+esc(locOf(d.units[i]))+'</b><span>'+snip(d.units[i])+'</span></button>'});
  if(S.res.length>S.n)h+='<button class="fab" id="more">Afficher plus</button>';
  L.innerHTML=h}
 function show(j){
  S.i=j;const[d,i]=S.res[j],u=d.units[i],hd=d.heads[u.sh];let h;
- $('#dt').textContent=d.name;$('#dsub').textContent=u.loc+'  ·  '+(j+1)+' / '+S.res.length;
- h=u.cells?u.cells.map((v,x)=>v?'<div class="cell"><small>'+(u.k=='x'?col(u.c0+x)+(hd&&hd!==u.cells&&hd[x]?' · '+esc(hd[x]):''):'Cellule '+(x+1))+'</small>'+mk(v)+'</div>').join(''):'<p class="big">'+mk(u.t)+'</p>';
- const b=$('#db');b.innerHTML=h;b.scrollTop=0;b.classList.remove('f');void b.offsetWidth;b.classList.add('f');$('#det').classList.add('on')}
+ $('#dt').textContent=d.name;$('#dsub').textContent=locOf(u)+'  ·  '+(j+1)+' / '+S.res.length;
+ const mt=(d.meta&&d.meta[u.sh])||{};
+ h=u.cells?(u.hid?'<div class="note">Ligne masquée (par un filtre ou manuellement)</div>':'')+(mt.af?'<div class="note">Filtre automatique sur la plage '+esc(mt.af)+'</div>':'')+u.cells.map((v,x)=>{const f=u.fx&&u.fx[x],n=u.nt&&u.nt[x];if(!(v||f||n))return'';
+  const lb=u.k=='x'?col(u.c0+x)+(hd&&hd!==u.cells&&hd[x]?' · '+esc(hd[x]):'')+((mt.hc||[]).includes(u.c0+x)?' · colonne masquée':''):'Cellule '+(x+1);
+  return'<div class="cell"><small>'+lb+'</small>'+(v?mk(v):'<i>(vide)</i>')+(f?'<em class="fx">'+mk(f)+'</em>':'')+(n?'<em class="nt">'+mk(n)+'</em>':'')+'</div>'}).join(''):'<p class="big">'+mk(u.t)+'</p>';
+ const b=$('#db');b.innerHTML=h+'<button class="fab" id="dv" style="margin-top:14px">Voir dans le document</button>';b.scrollTop=0;b.classList.remove('f');void b.offsetWidth;b.classList.add('f');$('#det').classList.add('on')}
+
+/* ---------- Visionneuse de document ---------- */
+const V={d:null,sh:null,list:[],n:150,jump:null};
+function openDoc(d,idx){
+ V.d=d;const u=idx!=null?d.units[idx]:null,tabs=(d.tabs||[]).filter(n=>d.units.some(x=>x.sh==n));
+ V.sh=tabs.length?(u&&u.sh?u.sh:tabs[0]):null;
+ $('#vt').textContent=d.name;const sel=$('#vs');sel.hidden=tabs.length<2;sel.innerHTML=tabs.map(n=>'<option>'+esc(n)+'</option>').join('');if(V.sh)sel.value=V.sh;
+ vrender(idx);$('#vw').classList.add('on')}
+function vrender(idx){
+ const d=V.d;V.list=[];d.units.forEach((u,i)=>{if(!V.sh||u.sh==V.sh)V.list.push(i)});
+ const p=idx!=null?V.list.indexOf(idx):0;V.n=Math.max(150,p+80);V.jump=idx!=null?idx:null;
+ $('#vsub').textContent=V.list.length+' '+d.lab+(V.sh?' · '+V.sh:'');vdraw()}
+function vdraw(){
+ const d=V.d,L=V.list.slice(0,V.n),hl=t=>S.rx?mk(t):esc(t);let h;
+ if(V.sh&&L.length){const mc=Math.max(1,...L.map(i=>d.units[i].cells.length)),c0=d.units[L[0]].c0;
+  h='<table><thead><tr><th></th>'+Array.from({length:mc},(_,x)=>'<th>'+col(c0+x)+'</th>').join('')+'</tr></thead><tbody>'+L.map(i=>{const u=d.units[i];
+   return'<tr id="r'+i+'"'+(u.hid?' class="hid"':'')+'><th>'+u.loc.match(/(\d+)$/)[1]+'</th>'+Array.from({length:mc},(_,x)=>{const f=u.fx&&u.fx[x];return'<td>'+hl(u.cells[x]||'')+(f?'<em class="fx">'+hl(f)+'</em>':'')+'</td>'}).join('')+'</tr>'}).join('')+'</tbody></table>'}
+ else h=L.map(i=>'<div class="blk" id="r'+i+'"><small>'+esc(locOf(d.units[i]))+'</small>'+hl(d.units[i].t)+'</div>').join('');
+ if(V.list.length>V.n)h+='<button class="fab" id="vm" style="margin-top:12px">Afficher plus ('+(V.list.length-V.n)+' restants)</button>';
+ $('#vb').innerHTML=h;
+ if(V.jump!=null){const e=$('#r'+V.jump);if(e){e.scrollIntoView({block:'center'});e.classList.add('flash')}V.jump=null}}
 
 /* ---------- Écrans, dialogues, quitter ---------- */
 const ORD=['home','search','docs'];let cur='home',cancel=null;
 function go(n){if(!ORD.includes(n))return;cur=n;document.body.dataset.s=n;ORD.forEach((s,i)=>{const e=$('#'+s);e.className='scr'+(s==n?' on':i<ORD.indexOf(n)?' l':'')});
  $$('nav button[data-go]').forEach(b=>b.classList.toggle('on',b.dataset.go==n));
  if(n=='home'){const h=$('#home');h.classList.remove('play');void h.offsetWidth;h.classList.add('play')}}
-function ask(t,m,ok,bad){return new Promise(r=>{$('#dtt').textContent=t;$('#dm').textContent=m;const b=$('#dok');b.textContent=ok;b.className=bad?'bad':'';$('#dlg').classList.add('on');
+function ask(t,m,ok,bad,solo){return new Promise(r=>{$('#dno').hidden=!!solo;$('#dtt').textContent=t;$('#dm').textContent=m;const b=$('#dok');b.textContent=ok;b.className=bad?'bad':'';$('#dlg').classList.add('on');
  const f=v=>{$('#dlg').classList.remove('on');cancel=null;r(v)};b.onclick=()=>f(true);$('#dno').onclick=()=>f(false);cancel=()=>f(false)})}
 async function quit(){if(await ask('Quitter FIND TIA ?','Vos documents restent en mémoire jusqu’à ce que vous les supprimiez.','Quitter',1)){document.body.classList.add('bye');setTimeout(()=>{const A=window.Capacitor&&Capacitor.Plugins&&Capacitor.Plugins.App;A?A.exitApp():window.close()},450)}}
 function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on');setTimeout(()=>t.classList.remove('on'),4000)}
 const wait=ms=>new Promise(r=>setTimeout(r,ms));
 
+/* ---------- Horloge dans la loupe (heure du téléphone) ---------- */
+let lastMin='';
+function tick(){const d=new Date(),s=d.getSeconds()+d.getMilliseconds()/1000,m=d.getMinutes()+s/60,h=(d.getHours()%12)+m/60,
+ set=(id,v)=>{const e=$('#'+id);if(e)e.setAttribute('transform','rotate('+v+' 26 26)')};set('ch',h*30);set('cm',m*6);set('cs',s*6);
+ const k=d.getHours()+':'+d.getMinutes();if(k!=lastMin){lastMin=k;const p=n=>String(n).padStart(2,'0');$('#ct').textContent=p(d.getHours())+':'+p(d.getMinutes());$('#cd').textContent=d.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'})}}
+(function loop(){if(cur=='home'&&!document.hidden)tick();requestAnimationFrame(loop)})();
+
+/* ---------- Menu, thèmes, aide ---------- */
+const TH=['lagune','savane'],TN={lagune:'Lagune',savane:'Savane'};
+function theme(n){document.body.dataset.t=n;$('#mt').textContent=TN[n];try{localStorage.setItem('ft-theme',n)}catch(e){}}
+const menu=on=>{$('#mn').classList.toggle('on',on);if(on)$('#mc').textContent=S.docs.length?S.docs.length+' en mémoire':''};
+const HELP='Expression exacte : trouve ce que vous tapez, tel quel.\nTous les mots : chaque mot peut se trouver n’importe où dans la ligne.\nJokers : * remplace plusieurs lettres, ? en remplace une (essayez tra*).\nExpression régulière : pour les recherches avancées.\n\nLes accents sont ignorés, sauf si « Respecter les accents » est coché. La recherche couvre les valeurs, les formules, les commentaires et tous les onglets.';
+const ABOUT='FIND TIA · version 1.0\n\nRecherche dans vos fichiers Word, Excel et PowerPoint.\nFonctionne sans connexion : vos documents restent dans le téléphone jusqu’à ce que vous les supprimiez.';
+function mact(m){menu(false);
+ if(m=='search'||m=='docs')go(m);else if(m=='add'){go('docs');$('#fi').click()}
+ else if(m=='help')ask('Aide à la recherche',HELP,'Fermer',0,1);else if(m=='about')ask('À propos',ABOUT,'Fermer',0,1);
+ else if(m=='quit')quit()}
+
 /* ---------- Documents ---------- */
 function fill(){
  const kb=n=>n>1048576?(n/1048576).toFixed(1)+' Mo':Math.ceil(n/1024)+' Ko';
- $('#dl').innerHTML=S.docs.length?S.docs.map(d=>'<div class="doc" data-id="'+d.id+'"><i class="ty '+d.type+'">'+d.type+'</i><div><b>'+esc(d.name)+'</b><small>'+d.units.length+' '+d.lab+' · '+kb(d.size)+' · '+new Date(d.added).toLocaleDateString('fr-FR')+'</small></div><button class="del" data-del="'+d.id+'">Supprimer</button></div>').join('')
+ $('#dl').innerHTML=S.docs.length?S.docs.map(d=>'<div class="doc" data-id="'+d.id+'"><i class="ty '+d.type+'">'+d.type+'</i><div><b>'+esc(d.name)+'</b><small>'+d.units.length+' '+d.lab+(d.tabs?' · '+d.tabs.length+' onglet'+(d.tabs.length>1?'s':''):'')+' · '+kb(d.size)+' · '+new Date(d.added).toLocaleDateString('fr-FR')+'</small></div><button class="op" data-open="'+d.id+'">Ouvrir</button><button class="del" data-del="'+d.id+'">Supprimer</button></div>').join('')
   +'<button class="lnk" id="delall">Tout supprimer</button>':'<div class="empty">Aucun document.<br>Ajoutez des fichiers Word, Excel ou PowerPoint : ils restent ici, même hors ligne, jusqu’à ce que vous les supprimiez.</div>';
  $('#hc').textContent=S.docs.length?S.docs.length+' document'+(S.docs.length>1?'s':'')+' en mémoire':'Aucun document en mémoire';
- const s=$('#os'),v=s.value;s.innerHTML='<option value="all">Tous les documents</option>'+S.docs.map(d=>'<option value="'+d.id+'">'+esc(d.name)+'</option>').join('');s.value=S.docs.some(d=>d.id==v)?v:'all'}
+ const s=$('#os'),v=s.value;s.innerHTML='<option value="all">Tous les documents</option>'+S.docs.map(d=>'<option value="'+d.id+'">'+esc(d.name)+'</option>').join('');s.value=S.docs.some(d=>d.id==v)?v:'all';tabSel()}
+function tabSel(){const d=S.docs.find(x=>x.id==$('#os').value),t=$('#ot');t.hidden=!(d&&d.tabs&&d.tabs.length>1);t.innerHTML='<option value="all">Tous les onglets</option>'+(d&&d.tabs?d.tabs.map(n=>'<option>'+esc(n)+'</option>').join(''):'')}
 async function add(files){
  const B=$('#busy');B.classList.add('on');
  for(const f of files){$('#bt').textContent='Lecture de '+f.name+'…';await wait(60);
   try{const d=await parse(f),o=S.docs.find(x=>x.name==d.name&&x.size==d.size);if(o){await DB.del(o.id);S.docs=S.docs.filter(x=>x!=o)}await DB.put(d);S.docs.push(d)}catch(e){toast(f.name+' : '+(e.message||e))}}
- B.classList.remove('on');fill();if($('#q').value)run()}
+ B.classList.remove('on');fill();if($('#q').value.trim())run()}
 
 /* ---------- Démarrage ---------- */
 document.addEventListener('click',async e=>{
@@ -111,7 +179,15 @@ document.addEventListener('click',async e=>{
  if(t.dataset.go)go(t.dataset.go);
  else if('q' in t.dataset)quit();
  else if(t.id=='add')$('#fi').click();
+ else if(t.id=='hm')menu(true)
+ else if(t.dataset.m=='theme'){theme(TH[(TH.indexOf(document.body.dataset.t)+1)%2])}
+ else if(t.dataset.m)mact(t.dataset.m)
  else if(t.id=='cl'){$('#q').value='';run();$('#q').focus()}
+ else if(t.id=='rst'){$$('#oc,#ow,#oa,#oh').forEach(x=>x.checked=false);$('#om').value='phrase';$('#os').value='all';tabSel();run()}
+ else if(t.dataset.open)openDoc(S.docs.find(x=>x.id==t.dataset.open))
+ else if(t.id=='dv'){const[d,i]=S.res[S.i];openDoc(d,i)}
+ else if(t.id=='vm'){V.n+=300;vdraw()}
+ else if(t.id=='vx')$('#vw').classList.remove('on')
  else if(t.id=='more'){S.n+=150;draw()}
  else if(t.dataset.j)show(+t.dataset.j);
  else if(t.id=='dx')$('#det').classList.remove('on');
@@ -119,15 +195,17 @@ document.addEventListener('click',async e=>{
  else if(t.id=='dn'&&S.i<S.res.length-1)show(S.i+1);
  else if(t.dataset.del){const d=S.docs.find(x=>x.id==t.dataset.del);if(await ask('Supprimer ce document ?',d.name,'Supprimer',1)){t.closest('.doc').classList.add('out');await wait(300);await DB.del(d.id);S.docs=S.docs.filter(x=>x!=d);fill();run()}}
  else if(t.id=='delall'&&await ask('Tout supprimer ?','Les '+S.docs.length+' documents seront retirés de la mémoire de l’application.','Tout supprimer',1)){await DB.clr();S.docs=[];fill();run()}});
+$('#vs').onchange=()=>{V.sh=$('#vs').value;vrender()};
+$('#mnb').onclick=()=>menu(false);
 $('#fi').onchange=e=>{const f=[...e.target.files];e.target.value='';if(f.length)add(f)};
 let tm;$('#q').oninput=()=>{clearTimeout(tm);tm=setTimeout(run,250)};
-$$('#oc,#ow,#oa,#om,#os').forEach(x=>x.onchange=run);
+$$('#oc,#ow,#oa,#oh,#om,#ot').forEach(x=>x.onchange=run);$('#os').onchange=()=>{tabSel();run()};
 let sx=0;$('#det').addEventListener('touchstart',e=>sx=e.touches[0].clientX,{passive:true});
 $('#det').addEventListener('touchend',e=>{const d=e.changedTouches[0].clientX-sx;if(d<-70&&S.i<S.res.length-1)show(S.i+1);else if(d>70&&S.i>0)show(S.i-1)},{passive:true});
-function back(){if(cancel)cancel();else if($('#det').classList.contains('on'))$('#det').classList.remove('on');else if(cur!='home')go('home');else quit()}
+function back(){if(cancel)cancel();else if($('#mn').classList.contains('on'))menu(false);else if($('#vw').classList.contains('on'))$('#vw').classList.remove('on');else if($('#det').classList.contains('on'))$('#det').classList.remove('on');else if(cur!='home')go('home');else quit()}
 document.addEventListener('keydown',e=>{if(e.key=='Escape')back()});
 (async()=>{
  try{await DB.init();S.docs=await DB.all();S.docs.sort((a,b)=>a.added-b.added)}catch(e){toast('Stockage indisponible : '+e)}
  if(navigator.storage&&navigator.storage.persist)navigator.storage.persist();
- fill();draw();go('home');
+ let th='lagune';try{th=localStorage.getItem('ft-theme')||th}catch(e){}theme(TN[th]?th:'lagune');fill();draw();go('home');
  const A=window.Capacitor&&Capacitor.Plugins&&Capacitor.Plugins.App;if(A)A.addListener('backButton',back)})();

@@ -135,11 +135,39 @@ const ORD=['home','search','docs'];let cur='home',cancel=null;
 function go(n){if(!ORD.includes(n))return;cur=n;document.body.dataset.s=n;ORD.forEach((s,i)=>{const e=$('#'+s);e.className='scr'+(s==n?' on':i<ORD.indexOf(n)?' l':'')});
  $$('nav button[data-go]').forEach(b=>b.classList.toggle('on',b.dataset.go==n));
  if(n=='home'){const h=$('#home');h.classList.remove('play');void h.offsetWidth;h.classList.add('play')}}
-function ask(t,m,ok,bad){return new Promise(r=>{$('#dtt').textContent=t;$('#dm').textContent=m;const b=$('#dok');b.textContent=ok;b.className=bad?'bad':'';$('#dlg').classList.add('on');
+function ask(t,m,ok,bad,solo){return new Promise(r=>{$('#dno').hidden=!!solo;$('#dtt').textContent=t;$('#dm').textContent=m;const b=$('#dok');b.textContent=ok;b.className=bad?'bad':'';$('#dlg').classList.add('on');
  const f=v=>{$('#dlg').classList.remove('on');cancel=null;r(v)};b.onclick=()=>f(true);$('#dno').onclick=()=>f(false);cancel=()=>f(false)})}
 async function quit(){if(await ask('Quitter FIND TIA ?','Vos documents restent en mémoire jusqu’à ce que vous les supprimiez.','Quitter',1)){document.body.classList.add('bye');setTimeout(()=>{const A=window.Capacitor&&Capacitor.Plugins&&Capacitor.Plugins.App;A?A.exitApp():window.close()},450)}}
 function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on');setTimeout(()=>t.classList.remove('on'),4000)}
 const wait=ms=>new Promise(r=>setTimeout(r,ms));
+
+/* ---------- Horloge dans la loupe (heure du téléphone) ---------- */
+let lastMin='';
+function tick(){const d=new Date(),s=d.getSeconds()+d.getMilliseconds()/1000,m=d.getMinutes()+s/60,h=(d.getHours()%12)+m/60,
+ set=(id,v)=>{const e=$('#'+id);if(e)e.setAttribute('transform','rotate('+v+' 26 26)')};set('ch',h*30);set('cm',m*6);set('cs',s*6);
+ const k=d.getHours()+':'+d.getMinutes();if(k!=lastMin){lastMin=k;const p=n=>String(n).padStart(2,'0');$('#ct').textContent=p(d.getHours())+':'+p(d.getMinutes());$('#cd').textContent=d.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'})}}
+(function loop(){if(cur=='home'&&!document.hidden)tick();requestAnimationFrame(loop)})();
+
+/* ---------- Menu, thèmes, aide ---------- */
+const TN={lagune:1,savane:1,ci:1};
+function theme(n){document.body.dataset.t=n;$$('.sw button').forEach(b=>b.classList.toggle('on',b.dataset.th==n));try{localStorage.setItem('ft-theme',n)}catch(e){}}
+const menu=on=>{$('#mn').classList.toggle('on',on);if(on)$('#mc').textContent=S.docs.length?S.docs.length+' en mémoire':''};
+const HELP='Expression exacte : trouve ce que vous tapez, tel quel.\nTous les mots : chaque mot peut se trouver n’importe où dans la ligne.\nJokers : * remplace plusieurs lettres, ? en remplace une (essayez tra*).\nExpression régulière : pour les recherches avancées.\n\nLes accents sont ignorés, sauf si « Respecter les accents » est coché. La recherche couvre les valeurs, les formules, les commentaires et tous les onglets.';
+const ABOUT='FIND TIA · version 1.0\n\nRecherche dans vos fichiers Word, Excel et PowerPoint.\nFonctionne sans connexion : vos documents restent dans le téléphone jusqu’à ce que vous les supprimiez.';
+function mact(m){menu(false);
+ if(m=='search'||m=='docs')go(m);else if(m=='add'){go('docs');$('#fi').click()}
+ else if(m=='help')ask('Aide à la recherche',HELP,'Fermer',0,1);else if(m=='about')ask('À propos',ABOUT,'Fermer',0,1);
+ else if(m=='perm')popen();else if(m=='quit')quit()}
+
+/* ---------- Autorisations (1re ouverture) ---------- */
+const PM=[{n:'Accès aux fichiers',d:'Pour lire les documents Excel, Word et PowerPoint que vous ajoutez.',pl:'Filesystem'},{n:'Notifications',d:'Pour vous prévenir quand la lecture d’un gros document se termine en arrière-plan.',pl:'LocalNotifications'}];
+const SL={granted:'Autorisée',denied:'Refusée',prompt:'À autoriser','prompt-with-rationale':'À autoriser',na:'Gérée par le téléphone'};
+const plug=p=>window.Capacitor&&Capacitor.Plugins&&Capacitor.Plugins[p];
+async function pstate(x,ask){const p=plug(x.pl);if(!p)return'na';try{const r=await(ask?p.requestPermissions():p.checkPermissions());return r.publicStorage||r.display||'granted'}catch(e){return'denied'}}
+async function pdraw(ask){let h='';for(const x of PM){const s=await pstate(x,ask);h+='<div class="pr"><em class="'+(s=='granted'?'ok':'')+'">'+SL[s]+'</em><b>'+x.n+'</b><small>'+x.d+'</small></div>'}$('#pl').innerHTML=h}
+async function popen(){const b=$('#pgo');b.textContent='Tout autoriser';b.dataset.d='';$('#pm').classList.add('on');await pdraw(false)}
+function pclose(){$('#pm').classList.remove('on');try{localStorage.setItem('ft-perm','1')}catch(e){}}
+function notify(t,b){const L=plug('LocalNotifications');if(L)L.schedule({notifications:[{id:Date.now()%2147483647,title:t,body:b}]}).catch(()=>{})}
 
 /* ---------- Documents ---------- */
 function fill(){
@@ -153,7 +181,7 @@ async function add(files){
  const B=$('#busy');B.classList.add('on');
  for(const f of files){$('#bt').textContent='Lecture de '+f.name+'…';await wait(60);
   try{const d=await parse(f),o=S.docs.find(x=>x.name==d.name&&x.size==d.size);if(o){await DB.del(o.id);S.docs=S.docs.filter(x=>x!=o)}await DB.put(d);S.docs.push(d)}catch(e){toast(f.name+' : '+(e.message||e))}}
- B.classList.remove('on');fill();if($('#q').value.trim())run()}
+ B.classList.remove('on');fill();if($('#q').value.trim())run();if(document.hidden)notify('FIND TIA','Lecture terminée : '+files.length+' fichier(s) ajouté(s).')}
 
 /* ---------- Démarrage ---------- */
 document.addEventListener('click',async e=>{
@@ -161,6 +189,11 @@ document.addEventListener('click',async e=>{
  if(t.dataset.go)go(t.dataset.go);
  else if('q' in t.dataset)quit();
  else if(t.id=='add')$('#fi').click();
+ else if(t.id=='hm')menu(true)
+ else if(t.dataset.th)theme(t.dataset.th)
+ else if(t.id=='pgo'){if(t.dataset.d)pclose();else{t.disabled=true;await pdraw(true);t.disabled=false;t.textContent='Continuer';t.dataset.d=1}}
+ else if(t.id=='pcl')pclose()
+ else if(t.dataset.m)mact(t.dataset.m)
  else if(t.id=='cl'){$('#q').value='';run();$('#q').focus()}
  else if(t.id=='rst'){$$('#oc,#ow,#oa,#oh').forEach(x=>x.checked=false);$('#om').value='phrase';$('#os').value='all';tabSel();run()}
  else if(t.dataset.open)openDoc(S.docs.find(x=>x.id==t.dataset.open))
@@ -175,15 +208,16 @@ document.addEventListener('click',async e=>{
  else if(t.dataset.del){const d=S.docs.find(x=>x.id==t.dataset.del);if(await ask('Supprimer ce document ?',d.name,'Supprimer',1)){t.closest('.doc').classList.add('out');await wait(300);await DB.del(d.id);S.docs=S.docs.filter(x=>x!=d);fill();run()}}
  else if(t.id=='delall'&&await ask('Tout supprimer ?','Les '+S.docs.length+' documents seront retirés de la mémoire de l’application.','Tout supprimer',1)){await DB.clr();S.docs=[];fill();run()}});
 $('#vs').onchange=()=>{V.sh=$('#vs').value;vrender()};
+$('#mnb').onclick=()=>menu(false);
 $('#fi').onchange=e=>{const f=[...e.target.files];e.target.value='';if(f.length)add(f)};
 let tm;$('#q').oninput=()=>{clearTimeout(tm);tm=setTimeout(run,250)};
 $$('#oc,#ow,#oa,#oh,#om,#ot').forEach(x=>x.onchange=run);$('#os').onchange=()=>{tabSel();run()};
 let sx=0;$('#det').addEventListener('touchstart',e=>sx=e.touches[0].clientX,{passive:true});
 $('#det').addEventListener('touchend',e=>{const d=e.changedTouches[0].clientX-sx;if(d<-70&&S.i<S.res.length-1)show(S.i+1);else if(d>70&&S.i>0)show(S.i-1)},{passive:true});
-function back(){if(cancel)cancel();else if($('#vw').classList.contains('on'))$('#vw').classList.remove('on');else if($('#det').classList.contains('on'))$('#det').classList.remove('on');else if(cur!='home')go('home');else quit()}
+function back(){if(cancel)cancel();else if($('#pm').classList.contains('on'))pclose();else if($('#mn').classList.contains('on'))menu(false);else if($('#vw').classList.contains('on'))$('#vw').classList.remove('on');else if($('#det').classList.contains('on'))$('#det').classList.remove('on');else if(cur!='home')go('home');else quit()}
 document.addEventListener('keydown',e=>{if(e.key=='Escape')back()});
 (async()=>{
  try{await DB.init();S.docs=await DB.all();S.docs.sort((a,b)=>a.added-b.added)}catch(e){toast('Stockage indisponible : '+e)}
  if(navigator.storage&&navigator.storage.persist)navigator.storage.persist();
- fill();draw();go('home');
+ let th='lagune';try{th=localStorage.getItem('ft-theme')||th}catch(e){}theme(TN[th]?th:'lagune');fill();draw();go('home');let seen;try{seen=localStorage.getItem('ft-perm')}catch(e){}if(!seen)popen();
  const A=window.Capacitor&&Capacitor.Plugins&&Capacitor.Plugins.App;if(A)A.addListener('backButton',back)})();
